@@ -18,12 +18,12 @@ resultBPFisher
 # Description:
 # Ontology: BP
 # 'weight01' algorithm with the 'fisher' test
-# 2758 GO terms scored: 45 terms with p < 0.01
+# 2758 GO terms scored: 95 terms with p < 0.01
 # Annotation data:
 #     Annotated genes: 11133
-#     Significant genes: 164
+#     Significant genes: 367
 #     Min. no. of genes annotated to a GO: 10
-#     Nontrivial nodes: 602
+#     Nontrivial nodes: 954
 
 # Put the number of GO terms in topNodes
 allBPRes <- GenTable(BPGOdata, classicFisher = resultBPFisher, orderBy = "classicFisher", ranksOf = "classicFisher", topNodes = 2758)
@@ -37,12 +37,12 @@ resultMFFisher
 # Description:
 # Ontology: MF
 # 'weight01' algorithm with the 'fisher' test
-# 724 GO terms scored: 25 terms with p < 0.01
+# 724 GO terms scored: 52 terms with p < 0.01
 # Annotation data:
 #     Annotated genes: 9599
-#     Significant genes: 150
+#     Significant genes: 334
 #     Min. no. of genes annotated to a GO: 10
-#     Nontrivial nodes: 192
+#     Nontrivial nodes: 309
 
 # Put the number of GO terms in topNodes
 allMFRes <- GenTable(MFGOdata, classicFisher = resultMFFisher, orderBy = "classicFisher", ranksOf = "classicFisher", topNodes = 724)
@@ -57,12 +57,12 @@ resultCCFisher
 # Description:
 # Ontology: CC
 # 'weight01' algorithm with the 'fisher' test
-# 401 GO terms scored: 9 terms with p < 0.01
+# 401 GO terms scored: 10 terms with p < 0.01
 # Annotation data:
 #     Annotated genes: 10953
-#     Significant genes: 131
+#     Significant genes: 328
 #     Min. no. of genes annotated to a GO: 10
-#     Nontrivial nodes: 103
+#     Nontrivial nodes: 136
 # Put the number of GO terms in topNodes
 allCCRes <- GenTable(CCGOdata, classicFisher = resultCCFisher, orderBy = "classicFisher", ranksOf = "classicFisher", topNodes = 401)
 write.table(allCCRes, file = "CC_Table_Expanded.txt", sep = "\t", quote = FALSE)
@@ -84,12 +84,12 @@ resultBPFisherNO
 # Description:
 # Ontology: BP
 # 'weight01' algorithm with the 'fisher' test
-# 2758 GO terms scored: 38 terms with p < 0.01
+# 2758 GO terms scored: 45 terms with p < 0.01
 # Annotation data:
 #     Annotated genes: 11133
-#     Significant genes: 65
+#     Significant genes: 164
 #     Min. no. of genes annotated to a GO: 10
-#     Nontrivial nodes: 304
+#     Nontrivial nodes: 602
 # Put the number of GO terms in topNodes
 allBPResNO <- GenTable(BPGOdataNO, classicFisher = resultBPFisherNO, orderBy = "classicFisher", ranksOf = "classicFisher", topNodes = 2758)
 write.table(allBPResNO, file = "BP_Table_Expanded_Npal_Only.txt", sep = "\t", quote = FALSE)
@@ -102,12 +102,12 @@ resultMFFisherNO
 # Description:
 # Ontology: MF
 # 'weight01' algorithm with the 'fisher' test
-# 724 GO terms scored: 16 terms with p < 0.01
+# 724 GO terms scored: 25 terms with p < 0.01
 # Annotation data:
 #     Annotated genes: 9599
-#     Significant genes: 54
+#     Significant genes: 150
 #     Min. no. of genes annotated to a GO: 10
-#     Nontrivial nodes: 80
+#     Nontrivial nodes: 192
 # Put the number of GO terms in topNodes
 allMFResNO <- GenTable(MFGOdataNO, classicFisher = resultMFFisherNO, orderBy = "classicFisher", ranksOf = "classicFisher", topNodes = 724)
 write.table(allMFResNO, file = "MF_Table_Expanded_Npal_Only.txt", sep = "\t", quote = FALSE)
@@ -123,11 +123,43 @@ resultCCFisherNO
 # 401 GO terms scored: 9 terms with p < 0.01
 # Annotation data:
 #     Annotated genes: 10953
-#     Significant genes: 54
+#     Significant genes: 131
 #     Min. no. of genes annotated to a GO: 10
-#     Nontrivial nodes: 66
+#     Nontrivial nodes: 103
 # Put the number of GO terms in topNodes
 allCCResNO <- GenTable(CCGOdataNO, classicFisher = resultCCFisherNO, orderBy = "classicFisher", ranksOf = "classicFisher", topNodes = 401)
 write.table(allCCResNO, file = "CC_Table_Expanded_Npal_Only.txt", sep = "\t", quote = FALSE)
 showSigOfNodes(CCGOdataNO, score(resultCCFisherNO), firstSigNodes = 10, useInfo = "all")
 printGraph(CCGOdataNO, resultCCFisherNO, firstSigNodes = 10, fn.prefix = "CC_Graph_Expanded_Npal_Only", useInfo = "all", pdfSW = TRUE)
+
+# Presence abscence
+#
+# Description:
+# Ontology: BP
+# 'weight01' algorithm with the 'fisher' test
+# 2758 GO terms scored: 50 terms with p < 0.01
+# Annotation data:
+#     Annotated genes: 11133
+#     Significant genes: 528
+#     Min. no. of genes annotated to a GO: 10
+#     Nontrivial nodes: 1825
+#
+# Description:
+# Ontology: MF
+# 'weight01' algorithm with the 'fisher' test
+# 724 GO terms scored: 28 terms with p < 0.01
+# Annotation data:
+#     Annotated genes: 9599
+#     Significant genes: 470
+#     Min. no. of genes annotated to a GO: 10
+#     Nontrivial nodes: 462
+#
+# Description:
+# Ontology: CC
+# 'weight01' algorithm with the 'fisher' test
+# 401 GO terms scored: 6 terms with p < 0.01
+# Annotation data:
+#     Annotated genes: 10953
+#     Significant genes: 502
+#     Min. no. of genes annotated to a GO: 10
+#     Nontrivial nodes: 249
