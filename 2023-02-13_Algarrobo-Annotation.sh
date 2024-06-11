@@ -1,399 +1,349 @@
 ############################################### CUSTOM REPEAT LIBRARY CONSTRUCTION #######################
-## Repeat library construction
-# The process described here is the same as in the Advanced Library Protocol in the MAKER wiki. First, MITEs were identified using MITEHunter.
-perl MITE_Hunter_manager.pl -i ppa_v1.asm.fa -g Algarrobo -n 30 -S 12345678
-# The output including “Step8_*.fa” and “Step8_singlet.fa” were combined and named MITE.lib.
-# Second, LTR were identified using LTRharvest and filtered with LTRdigest in the software genometools and other custom programs (CRL scripts). The protocol distinguishes between relatively recent and old LTRs by searching for candidates with 99% or 85% similarity, respectively.
-gt suffixerator -db ppafile -indexname ppafileindex -tis -suf -lcp -des -ssp -dna
-gt ltrharvest -index ppafileindex -out ppafile.out99 -outinner ppafile.outinner99 -gff3 ppafile.gff99 -minlenltr 100 -maxlenltr 6000 -mindistltr 1500 -maxdistltr 25000 -mintsd 5 -maxtsd 5 -motif tgca -similar 99 -vic 10 > ppafile.result99
-gt gff3 -sort ppafile.gff99 > ppafile.gff99.sort
-gt ltrdigest -trnas eukaryotic-tRNAs.fa ppafile.gff99.sort ppafileindex > ppafile.gff99.dgt
-perl CRL_Step1.pl --gff ppafile.gff99.dgt
-# The output is the file CRL_Step1_Passed_Elements.txt, which Is further filtered to identify three sources of false positives:  tandem local repeats such as centromeric repeats, local gene clusters derived from recent gene duplications, two other transposable elements located in adjacent regions. It may be necessary to modify the CRL_Step3.pl script if using an updated version of muscle.
-perl CRL_Step2.pl --step1 CRL_Step1_Passed_Elements.txt --repeatfile ppafile.out99 --resultfile ppafile.result99 --sequencefile ppafile --removed_repeats CRL_Step2_Passed_Elements.fasta
-mkdir fasta_files
-mv Repeat_*.fasta fasta_files
-mv CRL_Step2_Passed_Elements.fasta fasta_files
-cd fasta_files
-perl CRL_Step3.pl --directory . --step2 CRL_Step2_Passed_Elements.fasta --pidentity 60 --seq_c 25
-mv CRL_Step3_Passed_Elements.fasta ..
-cd ..
-# Next, elements with nested insertions of other LTRs or MITEs are identified and masked.
-perl ltr_library.pl --resultfile ppafile.result99 --step3 CRL_Step3_Passed_Elements.fasta --sequencefile ppafile
-# The output is lLTR_Only.lib which is combined with MITE.lib to form a library to mask the internal regions of putative LTR elements.
-cat lLTR_Only.lib MITE.lib > repeats_to_mask_LTR99.fasta
-RepeatMasker -lib repeats_to_mask_LTR99.fasta -nolow -dir . ppafile.outinner99
-# Then, the elements with nested insertions are removed.
-perl cleanRM.pl ppafile.outinner99.out ppafile.outinner99.masked > ppafile.outinner99.unmasked
-# If the internal region of the putative candidate element is very short, it is likely to be a false positive. These elements will be excluded.
-perl rmshortinner.pl ppafile.outinner99.unmasked 50 > ppafile.outinner99.clean
-# Next, BLASTX is used to identify any additional outinner sequence with nested insertions of putative autonomous DNA transposons and eliminate them.
-makeblastdb -in Tpases020812DNA -dbtype prot
-blastx -query ppafile.outinner99.clean -db Tpases020812DNA -evalue 1e-10 -num_descriptions 10 -out ppafile.outinner99.clean_blastx.out.txt
-perl outinner_blastx_parse.pl --blastx ppafile.outinner99.clean_blastx.out.txt --outinner ppafile.outinner99
-# The output is the file passed_outinner_sequence.fasta, which is then processed to build exemplars to use in MAKER.
-perl CRL_Step4.pl --step3 CRL_Step3_Passed_Elements.fasta --resultfile ppafile.result99 --innerfile passed_outinner_sequence.fasta --sequencefile ppafile
-makeblastdb -in lLTRs_Seq_For_BLAST.fasta -dbtype nucl
-blastn -query lLTRs_Seq_For_BLAST.fasta -db lLTRs_Seq_For_BLAST.fasta -evalue 1e-10 -num_descriptions 1000 -out lLTRs_Seq_For_BLAST.fasta.out
-makeblastdb -in Inner_Seq_For_BLAST.fasta -dbtype nucl
-blastn -query Inner_Seq_For_BLAST.fasta -db Inner_Seq_For_BLAST.fasta -evalue 1e-10 -num_descriptions 1000 -out Inner_Seq_For_BLAST.fasta.out
-CRL_Step5.pl –LTR_blast lLTRs_Seq_For_BLAST.fasta.out --inner_blast Inner_Seq_For_BLAST.fasta.out --step3 CRL_Step3_Passed_Elements.fasta --final LTR99.lib --pcoverage 90 --pidentity 80
-# The output is LTR99.lib, which contains the exemplar sequences of relatively recent LTRs. For old LTRs, the first step is modified to reduce the similarity to 85%.
-gt ltrharvest -index ppafileindex -out ppafile.out85 -outinner ppafile.outinner85 -gff3 ppafile.gff85 -minlenltr 100 -maxlenltr 6000 -mindistltr 1500 -maxdistltr 25000 -mintsd 5 -maxtsd 5 -vic 10 > ppafile.result85
-# The process afterwards is the same as for the relatively recent LTRs up to getting the file LTR85.lib. Since this last set of elements contain elements collected in LTR99.lib, highly similar exemplars are masked.
-RepeatMasker -lib LTR99.lib -dir . LTR85.lib
-removed_masked_sequence.pl --masked_elements LTR85.lib.masked --outfile FinalLTR85.lib
-# Finally, these two libraries are combined to get the final LTR library.
-cat LTR99.lib FinalLTR85.lib > allLTR.lib
-# The third step is to collect repetitive sequences from the remaining regions of the genome using RepeatModeler.
-cat allLTR.lib MITE.lib > allMITE_LTR.lib
-RepeatMasker -lib allMITE_LTR.lib -dir . ppafile
-perl rmaskedpart.pl ppafile.masked 50 > umppafile
-BuildDatabase -name umppafiledb -engine ncbi umppafile
-nohup RepeatModeler -database umppafiledb >& umppafile.out
-# The results are in a folder named “RM…”, the sequences are in consensi.fa.classified, some identified and other not. We separate them using a script.
-perl repeatmodeler_parse.pl --fasta-file consensi.fa.classified --unknowns repeatmodeler_unknowns.fasta --identities repeatmodeler_identities.fasta
-# The unknown repeats are searched against a transposase database for classification to the relevant superfamily.
-makeblastdb -in Tpases020812 -dbtype prot
-blastx -query repeatmodeler_unknowns.fasta -db Tpases020812 -evalue 1e-10 -num_descriptions 10 -out modelerunknown_blast_results.txt
-perl transposon_blast_parse.pl --blastx modelerunknown_blast_results.txt --modelerunknown repeatmodeler_unknown.fasta
-# These output files are renamed for easy identification:
-mv unknown_elements.txt ModelerUnknown.lib
-cat identified_elements.txt repeatmodeler_identities.fasta > ModelerID.lib
-# Finally, all repeats are searched against a plant protein database without transposons to exclude gene fragments. For this, we use ProtExcluder. For each library, do the following.
-makeblastdb -in alluniRefprexp070416 -dbtype prot
-blastx -query ModelerUnknown.lib -db alluniRefprexp070416 -evalue 1e-10 -num_descriptions 10 -out ModelerUnknown.lib_blast_results.txt
-perl ProtExcluder.pl -f 50 ModelerUnknown.lib_blast_results.txt ModelerUnknown.lib
-# The output is ModelerUnknown.libnoProtFinal. Repeat the same for the others library (ModelerID.lib, MITE.lib, AllLTR.lib). Combine all repeats with identifications to form KnownRepeats.lib.
-cat MITE.lib allLTR.lib ModelerID.libnoProtFinal > KnownRepeats.lib
-# Combine this library with repeats with unknown classifications to form allRepeats.lib.
-cat KnownRepeats.lib ModelerUnknown.libnoProtFinal > allRepeats.lib
-# The decision to use KnownRepeats.lib or allRepeats.lib depends on whether one wants to do a relaxed or conservative repeat masking. For N. pallida, allRepeats.lib was used.
+## Repeat library construction using RepeatModeler + LTR_retriever
+# RM
+BuildDatabase -name Neltuma_pallida -engine ncbi ppa_v1.asm.fasta
+RepeatModeler -threads 40 -engine ncbi -database Neltuma_pallida 2>&1 | tee Repeatmodeler.log
+# LTR
+gt suffixerator -db ppa_v1.asm.fasta -indexname ppa_v1.asm.fasta -tis -suf -lcp -des -ssp -sds -dna
+gt ltrharvest -index ppa_v1.asm.fasta -minlenltr 100 -maxlenltr 7000 -mintsd 4 -maxtsd 6 -motif TGCA -motifmis 1 -similar 85 -vic 10 -seed 20 -seqids yes > ppa_v1.asm.fasta.harvest.scn
+perl ~/Bioprograms/LTR_FINDER_parallel/LTR_FINDER_parallel/LTR_FINDER_parallel -seq ppa_v1.asm.fasta -threads 30 -harvest_out -size 1000000 -time 300
+cat ppa_v1.asm.fasta.harvest.scn ppa_v1.asm.fasta.finder.combine.scn > ppa_v1.asm.fasta.rawLTR.scn
+LTR_retriever -genome ppa_v1.asm.fasta -inharvest ppa_v1.asm.fasta.rawLTR.scn -threads 30
+# Joining outputs from RM and LTR
+cat consensi.fa.classified ppa_v1.asm.fasta.LTRlib.fa > RepeatsTotal.fa
+cat RepeatsTotal.fa | seqkit fx2tab | awk '{print "NelPal1_"$0}' | seqkit tab2fx > RepeatsTotal.prefix.fa
+cat RepeatsTotal.prefix.fa | seqkit fx2tab | grep -v "Unknown" | seqkit tab2fx > RepeatsKnown.prefix.fa #1444 known repeats
+cat RepeatsTotal.prefix.fa | seqkit fx2tab | grep "Unknown" | seqkit tab2fx > RepeatsUnknown.prefix.fa #1363 unknown repeats
+## Mask the genome step by step, based on Daren Card suggestions on his blog
+# First, soft masking simple repeats
+RepeatMasker -pa 30 -a -e ncbi -dir 01_simple_out -noint -xsmall ppa_v1.asm.fasta 2>&1 | tee logs/01_simplemask.log
+# Simple repeats 167011 elements, 7417610 bp, 1.84%
+# Low complexity 40628 elements, 2100656 bp, 0.52%
+# Second, mask using Repbase Viridiplantae
+RepeatMasker -pa 40 -a -e ncbi -dir 02_viridiplantae_out -nolow -species viridiplantae 01_simple_out/ppa_v1.asm.simple_mask.masked.fasta 2>&1 | tee logs/02_viridiplantaemask.log
+# Retroelements 53454 elements, 28879797 bp, 7.15%
+# DNA transposons 31579 elements, 7102580 bp, 1.76%
+# Rolling-circles 5017, 1008258 bp, 0.25%
+# Unclassified 247, 35860 bp, 0.01%
+# Small RNA, 745 elements, 116254 bp, 0.03%
+# Satellites, 414 elements, 128591 bp, 0.03%
+# Third, mask using the known repetitive elements
+RepeatMasker -pa 40 -a -e ncbi -dir 03_known_out -nolow -lib RepeatsKnown.prefix.fa 02_viridiplantae_out/ppa_v1.asm.viridiplantae_mask.masked.fasta 2>&1 | tee logs/03_knownmask.log
+# Retroelements, 209649 elements, 106138982 bp, 26.28%
+# DNA transposons, 39789 elements, 16208558 bp, 4.01%
+# Rolling-circles, 4286 elements, 1868879 bp, 0.46%
+# Small RNA, 2389 elements, 273413 bp, 0.07%
+# Simple repeats, 5 elements, 179 bp, 0.00%
+# Fourth, mask using the unknown repetitive elements
+RepeatMasker -pa 40 -a -e ncbi -dir 04_unknown_out -nolow -lib RepeatsUnknown.prefix.fa 03_known_out/ppa_v1.asm.known_mask.masked.fasta 2>&1 | tee logs/04_unknownmask.log
+cat 01_simple_out/ppa_v1.asm.simple_mask.cat.gz 02_tetrapoda_out/ppa_v1.asm.viridiplantae_mask.cat.gz 03_known_out/ppa_v1.asm.known_mask.cat.gz 04_unknown_out/ppa_v1.asm.unknown_mask.cat.gz > 05_full_out/ppa_v1.asm.full_mask.cat.gz
+cat 01_simple_out/ppa_v1.asm.simple_mask.out  <(cat 02_tetrapoda_out/ppa_v1.asm.viridiplantae_mask.out | tail -n +4) <(cat 03_known_out/ppa_v1.asm.known_mask.out | tail -n +4) <(cat 04_unknown_out/ppa_v1.asm.unknown_mask.out | tail -n +4) > 05_full_out/ppa_v1.asm.full_mask.out
+cat 01_simple_out/ppa_v1.asm.simple_mask.out > 05_full_out/ppa_v1.asm.simple_mask.out
+# Summarize the masking results
+ProcessRepeats -a -species tetrapoda 05_full_out/ppa_v1.asm.full_mask.cat.gz 2>&1 | tee logs/05_fullmask.log
+# Get repeats GFF3
+./rmOutToGFF3custom -o 05_full_out/ppa_v1.asm.full_mask.out > 05_full_out/ppa_v1.asm.full_mask.gff3
+./rmOutToGFF3custom -o 05_full_out/ppa_v1.asm.simple_mask.out > 05_full_out/ppa_v1.asm.simple_mask.gff3
+./rmOutToGFF3custom -o 05_full_out/ppa_v1.asm.complex_mask.out > 05_full_out/ppa_v1.asm.complex_mask.gff3
+# Create masked genome FASTA files for annotation
+bedtools maskfasta -soft -fi ppa_v1.asm.fasta -bed 05_full_out/ppa_v1.asm.simple_mask.gff3 -fo 05_full_out/ppa_v1.asm.fasta.simple_mask.soft.fasta
+bedtools maskfasta -fi 05_full_out/ppa_v1.asm.simple_mask.soft.fasta -bed 05_full_out/ppa_v1.asm.complex_mask.gff3 -fo 05_full_out/ppa_v1.asm.simple_mask.soft.complex_mask.hard.fasta
 
 ############################################### TRANSCRIPTS EVIDENCE: TRANSCRIPTOME #######################
-# For transcription evidence, a long-read assembly was performed using RATTLE for each tissue separately including leaf, branch, petiole, root, buds, flowers and fruits
-porechop -i input_reads.fastq -o output_reads.fastq
-seqkit seq -m 150 output_reads.fastq > output_reads_150.fastq
-rattle cluster -i output_reads_150.fastq -t 25 -o .
-rattle cluster_summary -i output_reads_150.fastq -c clusters.out > cluster_summary.txt
-rattle correct -i output_reads_150.fastq -c clusters.out -t 25 --verbose
-rattle polish -i consensi.fq -t 25 --summary --verbose
-# Having assembled transcripts to reduce chance of false positives. Also, MAKER uses exonerate to identify intron regions. The problem is that some transcripts may be present in low numbers and are removed as evidence
+guppy_basecaller --recursive --input_path /media/prosopis/D/2022_Prosopis/arn_recovery_2024/RNA_Prosopis --save_path Lib1 --config dna_r9.4.1_450bps_sup.cfg --records_per_fastq 0 --trim_strategy dna --disable_trim_barcodes --barcode_kits 'SQK-PCB109' --compress_fastq --device 'auto'
+guppy_basecaller --recursive --input_path /media/prosopis/D/2022_Prosopis/arn_recovery_2024/LibTogether --save_path Lib2 --config dna_r9.4.1_450bps_sup.cfg --records_per_fastq 0 --trim_strategy dna --disable_trim_barcodes --barcode_kits 'SQK-PCB109' --compress_fastq --device 'auto'
+cat */*/pass/*.fastq > cDNA_Alltissues.fastq
+## Read preprocessing
+~/Bioprograms/porechop/Porechop/porechop-runner.py -i cDNA_Alltissues.fastq -o cDNA_Alltissues_porechop.fastq -t 30
+NanoFilt -q 9 -l 500 cDNA_Alltissues_porechop.fastq > cDNA_Alltissues_porechop_nanofilt_q9_l500.fastq
+## Mapping reads to genome
+minimap2 -N 1 -a -x splice -g2000 -G5k -t 35 ppa_v1.asm.fasta cDNA_Alltissues_porechop_nanofilt_q9_l500.fastq > cDNA_alignment_ref.sam
+# N -> Output secondary alignments. When using long read cDNA it can output unspliced pseudogenes.
+#-x splic means orientation of transcript is unknown and does two rounds of alignment to infer the orientation
+# Do not take into account extremely long introns
+# samtools flagstat -@ 30 cDNA_alignment_ref.sam
+# 3952198 + 0 in total (QC-passed reads + QC-failed reads)
+# 3547405 + 0 primary
+# 257119 + 0 secondary
+# 147674 + 0 supplementary
+# 0 + 0 duplicates
+# 0 + 0 primary duplicates
+# 3860426 + 0 mapped (97.68% : N/A)
+# 3455633 + 0 primary mapped (97.41% : N/A)
+# 0 + 0 paired in sequencing
+# 0 + 0 read1
+# 0 + 0 read2
+# 0 + 0 properly paired (N/A : N/A)
+# 0 + 0 with itself and mate mapped
+# 0 + 0 singletons (N/A : N/A)
+# 0 + 0 with mate mapped to a different chr
+# 0 + 0 with mate mapped to a different chr (mapQ>=5)
+samtools sort -@ 30 -o cDNA_alignment_ref.sorted.bam cDNA_alignment_ref.sam
+## Construct reference-guided transcriptome using StringTie
+stringtie cDNA_alignment_ref.sorted.bam -m 500 -t -c 1.5 -f 0.05 -s 4.5 -g 250 -p 35 -o transcriptome.gtf -l NPTR
+# Conservative parameters for assembly of transcripts based on reference genome. Also produces isoforms. Minimum 500 length, 4.5 per-base coverage for single exon transcript
+# Results in exons, could be CDS or UTRs
 # MAKER allows to include transcriptomes from close species. In this case, leaf transcriptomes from N. alba and P. cineraria were downloaded from NCBI.
-
 ############################################### PROTEIN EVIDENCE: PLANT SWISSPROT #######################
 # For protein evidence, protein sequences from the database UniProt – SwissProt restricted to plants were downloaded in .dat format. To parse the sequences, the perl script from SwissKnife varsplic.pl was used.
-perl varsplic.pl -input unprot_sprot_plants.dat -check_vsps -crosscheck -error varsplic.err -fasta USP_plants.fasta -which full #Also do without isoforms for functional annotation
-
+perl varsplic.pl -input unprot_sprot_plants.dat -check_vsps -crosscheck -error varsplic.err -fasta Var_USP_plants.fasta -which full #Also do without isoforms for functional annotation
 ############################################### ALTERNATIVE TRANSCRIPTS #######################
 # Download transcriptome for N. alba and P. cineraria
-
 ############################################### MAKER ANNOTATION: ROUND 1 #######################
 # To use MAKER, first we need to create and edit control files. Using maker -CTL will create four files. The file maker_exe.ctl needs to have the correct paths for the programs used. The file maker_opts.ctl has all the configuration for the run.
 maker -CTL
 # For the first round, modify the following lines:
-# genome= 	Add the path to the assembly fasta.
-# est=	Add the path to each N. pallida transcriptome. Separate each one with a comma. After each path indicate a code for the tissue for easy visualization later. For example, “/path/to/leaf_transcriptome.fa:EST_Leaf”.
+# genome= 	Add the path to the masked assembly fasta.
 # altest=	Add the path to each close species transcriptome. Similar to est, separate with a comma and add the name of the species of origin.
 # protein=	Add the path to the swissprot sequences.
-# model_org=	Remove whatever is here since we are not using RepBase
-# rmlib=	Add the path to the custom repeat library
 # est2genome=	Turn this from 0 to 1
 # protein2genome=	Turn this from 0 to 1
-# trna=	Turn this from 0 to 1
-# cpus=	For the “prosopis” workstation, set to 10
 # min_protein=	Change from 0 to 50 to require a minimum protein length
-# To start MAKER, use the command “maker” in the same folder where the control files are created. To run MAKER more efficiently, run three different tasks in the same directory. MAKER knows when a contig is being processed and will work on another one.
-maker 2> maker1.err &
-maker 2> maker2.err &
-maker 2> maker3.err &
+# To start MAKER, use the command “maker” in the same folder where the control files are created. To run MAKER more efficiently, run three different tasks in the same directory. MAKER knows when a contig is being processed and will work on another one. Do not mask
+maker -RM_off 2> maker1.err &
+maker -RM_off 2> maker2.err &
+maker -RM_off 2> maker3.err &
 # To monitor how each run is going, you can print the log continuously using the following command:
 tail -f maker1.err
-
 ## Train gene models for second annotation round
 # After MAKER is finished, go to the output folder and extract the gff and sequences. These will be used to get the gene models for training with SNAP and Augustus.
-gff3_merge -n -s -d ppa_v1.asm.fa_master_datastore_index.log > Algarrobo_rnd1.all.maker.noseq.gff
+gff3_merge -n -s -d ppa_v1.asm.fa_master_datastore_index.log > Algarrobo_rnd1.gff
 fasta_merge -d ppa_v1.asm.fa_master_datastore_index.log
 # To train for SNAP, gene models are first filtered to discard models with an AED higher than 0.25 and coding proteins shorter than 50 amino acids.
 maker2zff -x 0.25 -l 50 -d /path/to/ppa_v1.asm.fa_master_datastore_index.log
-rename ‘s/genome/Algarrobo_rnd1.zff.length50_aed0.25/g’ *
 # Then, the training sequences and annotations are gathered with additional 1 kb upstream and downstream.
-fathom Algarrobo_rnd1.zff.length50_aed0.25.ann Algarrobo_rnd1.zff.length50_aed0.25.dna -categorize 1000 > categorize.log 2>&1
+fathom genome.ann genome.dna -categorize 1000 > categorize.log 2>&1
 fathom uni.ann uni.dna -export 1000 -plus > uni-plus.log 2>&1
 # Next, the training parameters are created, and the HMM file is assembled. This will be used for MAKER to predict gene models using the trained SNAP.
 mkdir params
 cd params
 forge ../export.ann ../export.dna > ../forge.log 2>&1
 cd ..
-hmm-assembler.pl Algarrobo_rnd1.zff.length50_aed0.25 params > Algarrobo_rnd1.zff.length50_aed0.25.hmm
+hmm-assembler.pl genome params > Algarrobo_rnd1.hmm
 # To train for Augustus, a BUSCO feature is used, so in this case the 2023-01-busco environment needs to be activated. Make sure to index the assembly fasta before starting.
 samtools faidx assembly.fasta
 # The first step is to gather the regions that contain the mRNA annotations with up to 1 kb on each side.
-awk -v OFS="\t" '{if ($3 == "mRNA") print $1, $4, $5 }' ../../../1-Output/Algarrobo_rnd1.all.maker.noseq.gff | while read rna; do scaffold=`echo ${rna} | awk '{ print $1 }'`; end=`cat ../../../Genome/ppa_v1.asm.fa.fai | awk -v scaffold="${scaffold}" -v OFS="\t" '{ if ($1 == scaffold) print $2 }'`; echo ${rna} | awk -v end="${end}" -v OFS="\t" '{ if ($2 < 1000 && (end - $3) < 1000) print $1, "0", end; else if ((end - $3) < 1000) print $1, "0", end; else if ($2 < 1000) print $1, "0", $3+1000; else print $1, $2-1000, $3+1000 }'; done | bedtools getfasta -fi ../../../Genome/ppa_v1.asm.fa -bed - -fo Algarrobo_rnd1.all.maker.transcripts1000.fasta
+awk -v OFS="\t" '{if ($3 == "mRNA") print $1, $4, $5 }' Algarrobo_rnd1.gff | while read rna; do scaffold=`echo ${rna} | awk '{ print $1 }'`; end=`cat ppa_v1.asm.fa.fai | awk -v scaffold="${scaffold}" -v OFS="\t" '{ if ($1 == scaffold) print $2 }'`; echo ${rna} | awk -v end="${end}" -v OFS="\t" '{ if ($2 < 1000 && (end - $3) < 1000) print $1, "0", end; else if ((end - $3) < 1000) print $1, "0", end; else if ($2 < 1000) print $1, "0", $3+1000; else print $1, $2-1000, $3+1000 }'; done | bedtools getfasta -fi ppa_v1.asm.fa -bed - -fo Algarrobo_rnd1.transcripts1000.fasta
 # Then, BUSCO will do a reannotation of the extracted regions using BLAST and built-in HMMs for a set of conserved genes. Then, with the “--long" option, BUSCO will optimize the HMM search model to train Augustus and produce a trained HMM for MAKER. In this case, the set of conserved genes is from embryophyta_odb10, and the starting HMM model is from arabidopsis.
-busco -i Algarrobo_rnd1.all.maker.transcripts1000.fasta -o Algarrobo_rnd1_maker -l embryophyta_odb10 -m genome -c 30 --long --augustus_species arabidopsis --tar --augustus_parameters=--progress=true
+busco -i Algarrobo_rnd1.transcripts1000.fasta -o Algarrobo_rnd1_maker -l embryophyta_odb10 -m genome -c 30 --long --augustus_species arabidopsis --tar --augustus_parameters=--progress=true
 # Once BUSCO is complete, we need to modify the names and the content of some files before copying it to the config path of Augustus.
-rename ‘s/BUSCO_Algarrobo_rnd1_maker/Neltuma_pallida/g’ *
-sed -i ‘s/BUSCO_Algarrobo_rnd1_maker/Neltuma_pallida/g’ Neltuma_pallida_parameters.cfg
-sed -i ‘s/BUSCO_Algarrobo_rnd1_maker/Neltuma_pallida/g’ Neltuma_pallida_parameters.cfg.orig1
-mkdir /opt/augustus/config/species/Neltuma_pallida
-cp Neltuma_pallida_* /opt/augustus/config/species/Neltuma_pallida/.
+mkdir /opt/augustus/config/species/BUSCO_Algarrobo_rnd1_maker
+cp BUSCO_Algarrobo_rnd1_maker* /opt/augustus/config/species/BUSCO_Algarrobo_rnd1_maker/.
+# ---------------------------------------------------
+# |Results from dataset embryophyta_odb10            |
+# ---------------------------------------------------
+# |C:79.2%[S:75.4%,D:3.8%],F:3.9%,M:16.9%,n:1614     |
+# |1278    Complete BUSCOs (C)                       |
+# |1217    Complete and single-copy BUSCOs (S)       |
+# |61    Complete and duplicated BUSCOs (D)          |
+# |63    Fragmented BUSCOs (F)                       |
+# |273    Missing BUSCOs (M)                         |
+# |1614    Total BUSCO groups searched               |
+# ---------------------------------------------------
 
 ############################################### MAKER ANNOTATION: ROUND 2 #######################
 # First, in the directory ../1-Output, the gff was separated to obtain the est2genome, protein2genome and repeat annotations. These will be used for the following MAKER runs.
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\test2genome” > Algarrobo_rnd1.all.maker.est2genome.gff
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\tprotein2genome” > Algarrobo_rnd1.all.maker.protein2genome.gff
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\trepeat” > Algarrobo_rnd1.all.maker.repeats.gff
+cat Algarrobo_rnd1.gff | grep -P “\test2genome” > Algarrobo_rnd1.est2genome.gff
+cat Algarrobo_rnd1.gff | grep -P “\tcdna2genome” > Algarrobo_rnd1.cdna2genome.gff
+cat Algarrobo_rnd1.gff | grep -P “\tprotein2genome” > Algarrobo_rnd1.protein2genome.gff
 # Copy all control files from the first round and modify the following options:
-# est=	Remove the paths
-# altest=	Remove the paths
 # est_gff=	Add the path to the est2genome gff from the first round
 # altest_gff=	Add the path to the cdna2genome gff from the first round
-# protein=	Remove the path
 # protein_gff=	Add the path to the protein2genome gff from the first round
-# rmlib=	Remove the path
-# repeat_protein=	Remove the path
-# rm_gff=	Add the path to the repeats gff from the first round
 # snaphmm=	Add the path to the SNAP HMM file
-# augustus_species=	Write “Neltuma_pallida”. As the folder is in the config file, it should be recognized by Augustus.
-# max_dna_len=	Change to 300000 to increase memory usage
+# augustus_species=	Write “BUSCO_Algarrobo_rnd1_maker”. As the folder is in the config file, it should be recognized by Augustus.
+# ---------------------------------------------------
+# |Results from dataset embryophyta_odb10            |
+# ---------------------------------------------------
+# |C:86.5%[S:83.8%,D:2.7%],F:4.8%,M:8.7%,n:1614      |
+# |1396    Complete BUSCOs (C)                       |
+# |1353    Complete and single-copy BUSCOs (S)       |
+# |43    Complete and duplicated BUSCOs (D)          |
+# |78    Fragmented BUSCOs (F)                       |
+# |140    Missing BUSCOs (M)                         |
+# |1614    Total BUSCO groups searched               |
+# ---------------------------------------------------
 
 ############################################### MAKER ANNOTATION: ROUND 3 #######################
-# For the third annotation run, repeat the training with the new gene models. For Augustus, change the initial species to Neltuma_pallida, and the output as Neltuma_pallida_2.
-# Modify the following options in the control file to use the retrained gene models and to keep unsupported gene models, which will later be filtered based on the presence of functional domains.
+# For the third annotation run, repeat the training with the new gene models. For Augustus, change the initial species to Neltuma_pallida, and the output as BUSCO_Algarrobo_rnd2_maker.
+# Modify the following options in the control file to use the retrained gene models
 # snaphmm=	Add the path to the new SNAP HMM file
-# augustus_species=	Write “Neltuma_pallida_2”
+# augustus_species=	Write “BUSCO_Algarrobo_rnd2_maker”
+# Activate alt_splice=1
+# ---------------------------------------------------
+# |Results from dataset embryophyta_odb10            |
+# ---------------------------------------------------
+# |C:89.9%[S:78.4%,D:11.5%],F:3.0%,M:7.1%,n:1614     |
+# |1451    Complete BUSCOs (C)                       |
+# |1266    Complete and single-copy BUSCOs (S)       |
+# |185    Complete and duplicated BUSCOs (D)         |
+# |49    Fragmented BUSCOs (F)                       |
+# |114    Missing BUSCOs (M)                         |
+# |1614    Total BUSCO groups searched               |
+# ---------------------------------------------------
+#Third round: 20,069 genes, 22343 gene models
 
-############################################### MAKER ANNOTATION: ROUND 4 #######################
-# Rescue predicted gene models with functional domains identified by InterProScan.
-interproscan.sh -appl PfamA -iprlookup -goterms -f stv -i Algarrobo_rnd3.all.maker.proteins.fasta
-cat Algarrobo_rnd3.all.maker.proteins.fasta.tsv | cut -f1 | sort | uniq | sed ‘s/abinitio/predicted/’ > names.txt
-cat Algarrobo_rnd3.all.maker.gff | grep -f names.txt > Predicted.gff
-# Run an extra annotation round passing the final GFF except the predictions. Provide the predictions gff file in the Gene prediction section and keep them.
-# maker_gff=	Add the path to the MAKER gff
-# est_pass=	Change to 1
-# altest_pass=	Change to 1
-# protein_pass=	Change to 1
-# rm_pass=	Change to 1
-# model_pass=	Change to 1
-# other_pass=	Change to 1
-# est_gff=	Remove the path
-# altest_gff=	Remove the path
-# protein_gff=	Remove the path
-# rm_gff=	Remove the path
-# snaphmm=	Remove the path
-# augustus_species=	Remove the name
-# pred_gff=	Add the path to the predicted gene models with domains
-# keep_preds=	Change to 1
+## Remove transcripts containing masked regions from the evidence-based gene models
+seqkit grep -v --by-seq -p "X" ../../2024-05-29_Npal_rnd3.all.maker.proteins.fasta > 2024-06-02_Npal_rnd3.nomasked.proteins.fasta
+seqkit fx2tab 2024-06-02_Npal_rnd3.nomasked.proteins.fasta | cut -f1 | cut -d' ' -f1 | seqkit grep -r -n -f - ../../2024-05-29_Npal_rnd3.all.maker.transcripts.fasta > 2024-06-02_Npal_rnd3.nomasked.transcripts.fasta
+# Filter the original gff
+seqkit grep --by-seq -p "X" ../../2024-05-29_Npal_rnd3.all.maker.proteins.fasta | seqkit fx2tab | cut -f1 | cut -d' ' -f1 > remove_names.txt
+cat remove_names.txt | grep -v -f - ../../2024-05-29_Npal_rnd3.all.maker.gff > 2024-06-02_Npal_rnd3.filtered1.gff
 
-############################################### MAKER ANNOTATION: ROUND 5 #######################
-# Reassess and improve gene models using all RNASeq data, copy the maker control file from the third round
-# est_gff= Change path to all RNASeq data (or merged with transcriptome)
-# snaphmm= Remove the path
-# augustus_species= Remove the name
-# pred_gff= Add the path to all gene models from fourth round
-# keep_preds= Change to 1
-# Retrieve the GFF and sequence files as explained above and follow the functional annotation
+cat remove_names.txt | cut -d'-' -f1-5 | grep -f - 2024-06-02_Npal_rnd3.filtered1.gff | grep -P "\tmRNA\t" | cut -f9 | sed 's/Parent=/\t/' | cut -f2 | cut -d';' -f1 | sort | uniq | grep -v -f - remove_names.txt | cut -d'-' -f1-5 | sed 's/$/;/' | grep -v -f - 2024-06-02_Npal_rnd3.filtered1.gff > 2024-06-02_Npal_rnd3.filtered2.gff
+# From 20,069 to 18,787 genes
+# From 22,343 to 20,990 gene models
 
-############################################### FUNCTIONAL ANNOTATION #######################
-# First get the GFF and fasta files as explained above. Change name of genes
-maker_map_ids --prefix NPAL_ --justify 6 Algarrobo_rnd5.all.maker.gff > Algarrobo_rnd5.all.maker.map
-map_gff_ids Algarrobo_rnd5.all.maker.map Algarrobo_rnd5.all.maker.gff
-map_fasta_ids Algarrobo_rnd5.all.maker.map Algarrobo_rnd5.proteins.fasta
-map_fasta_ids Algarrobo_rnd5.all.maker.map Algarrobo_rnd5.transcripts.fasta
+### Filtered busco (only maker, no only predicted)
+# ---------------------------------------------------
+# ---------------------------------------------------
+# |Results from dataset embryophyta_odb10            |
+# ---------------------------------------------------
+# |C:85.7%[S:74.3%,D:11.4%],F:3.1%,M:11.2%,n:1614    |
+# |1383    Complete BUSCOs (C)                       |
+# |1199    Complete and single-copy BUSCOs (S)       |
+# |184    Complete and duplicated BUSCOs (D)         |
+# |50    Fragmented BUSCOs (F)                       |
+# |181    Missing BUSCOs (M)                         |
+# |1614    Total BUSCO groups searched               |
+# ---------------------------------------------------
 
-# Run InterProScan to identify functional domains and append the matches to the last column of the GFF.
-~/Bioprograms/interproscan/interproscan-5.65-97.0/interproscan.sh -appl PfamA -iprlookup -goterms -f tsv -i Algarrobo_rnd5.proteins.fasta
-ipr_update_gff Algarrobo_rnd5.all.maker.gff Algarrobo_rnd5.proteins.fasta > Algarrobo_rnd5.all.maker.ipr.gff
+## Get only predicted gene models without masked regions
+cat ../../2024-05-29_Npal_rnd3.all.maker.non_overlapping_ab_initio.proteins.fasta | seqkit grep -v --by-seq -p "X" - > 2024-06-02_Npal_rnd3.nomasked.non_overlapping.proteins.fasta
+# From 20,536 to 17,237 non-overlapping predicted proteins
 
-# BLAST with SwissProt plants using BLAST and append most similar protein
-~/Bioprograms/blast/ncbi-blast-2.2.28+/bin/makeblastdb -in USP_plants_parsed.fasta -input_type fasta -dbtype prot #It has to be protein file without isoform variants
-~/Bioprograms/blast/ncbi-blast-2.2.28+/bin/blastp -db USP_plants_parsed.fasta -query Algarrobo_rnd5.proteins.fasta -out maker2uni.blastp -evalue .000001 -outfmt 6 -num_alignments 1 -seg yes -soft_masking true -lcase_masking -max_hsps_per_subject 1 -num_threads 25
-maker_functional_gff USP_plants_parsed.fasta maker2uni.blastp Algarrobo_rnd5.all.maker.ipr.gff > Algarrobo_rnd5.all.maker.ipr.blast.gff
-maker_functional_fasta USP_plants_parsed.fasta maker2uni.blastp Algarrobo_rnd5.proteins.fasta > Algarrobo_rnd5.proteins.blast.fasta
-maker_functional_fasta USP_plants_parsed.fasta maker2uni.blastp Algarrobo_rnd5.transcripts.fasta > Algarrobo_rnd5.transcripts.blast.fasta
+## Get unmasked non overlapping proteins
+/data/lastexpansion/Renato/Bioprograms/Interproscan/interproscan-5.67-99.0/interproscan.sh -appl PfamA -iprlookup -goterms -f tsv -i ../2024-06-02_Npal_rnd3.nomasked.non_overlapping.proteins.fasta
+# 3682 proteins with Pfam domains
+cat 2024-06-02_Npal_rnd3.nomasked.non_overlapping.proteins.fasta.tsv | cut -f1 | sort | uniq | sed 's/processed/abinit/' | grep -f - ../../../2024-05-29_Npal_rnd3.all.maker.gff > ../2024-06-02_Npal_rnd3.nomasked.predicted.gff
 
-# Lastly, annotate with eggNOG mapper
-emapper.py -i Algarrobo_rnd5.proteins.blast.fasta --output_dir EM_Viridiplantae --cpu 20 --dbmem --report_orthologs --excel --decorate_gff Algarrobo_rnd5.all.maker.ipr.blast.gff -o Algarrobo_rnd5.all.maker.ipr.blast --tax_scope Viridiplantae
+### Another maker round to format the predicted gff
+####################################################
+gff3_merge -n -s -d ppa_v1.asm_master_datastore_index.log > 2024-05-31_Npal_rnd3.predicted.gff
+fasta_merge -o 2024-05-31_Npal_rnd3 -d ppa_v1.asm_master_datastore_index.log
 
-############################################### MAKER ANNOTATION: ROUND 6 #######################
-# Additional round to identify alternative splice isoforms. Copy the maker control file from round 5
-# snaphmm= Add path to second trained hmm file
-# augustus_species= Specify second species name
-# pred_gff= Remove the path
-# model_gff= Add path to gene models from previous round
-# keep_preds= Change to 0
-# alt_splice= Change to 1
-# Retrieve the GFF and sequence files as explained above, and filter out unsupported gene models
-quality_filter.pl -s Algarrobo_rnd6.all.maker.noseq.ipr.blast.emapper.decorated.gff > Algarrobo_rnd6.all.maker.noseq.ipr.blast.emapper.decorated.aed1.gff
-grep -P "\tmRNA" Algarrobo_rnd6.all.maker.noseq.ipr.blast.emapper.decorated.aed1.gff | cut -f9 | cut -d ';' -f1 | seqkit grep -f - Algarrobo_rnd6.proteins.fasta > Algarrobo_rnd6.proteins.aed1.fasta
-grep -P "\tmRNA" Algarrobo_rnd6.all.maker.noseq.ipr.blast.emapper.decorated.aed1.gff | cut -f9 | cut -d ';' -f1 | seqkit grep -f - Algarrobo_rnd6.transcripts.fasta > Algarrobo_rnd6.transcripts.aed1.fasta
+gff3_merge -o 2024-06-02_Npal_rnd3.merged.gff 2024-06-02_Npal_rnd3.filtered2.gff ppa_v1.asm.maker.output/2024-06-02_Npal_rnd3.predicted.gff
+cat 2024-06-02_Npal_rnd3.nomasked.transcripts.fasta ppa_v1.asm.maker.output/2024-06-02_Npal_rnd3.all.maker.transcripts.fasta > 2024-06-02_Npal_rnd3.merged.transcripts.fasta
+cat 2024-06-02_Npal_rnd3.nomasked.proteins.fasta ppa_v1.asm.maker.output/2024-06-02_Npal_rnd3.all.maker.proteins.fasta > 2024-06-02_Npal_rnd3.merged.proteins.fasta
+# Standard gene set: 22,469 genes and 24,672 gene models
+# ---------------------------------------------------
+# |Results from dataset embryophyta_odb10            |
+# ---------------------------------------------------
+# |C:89.1%[S:77.6%,D:11.5%],F:3.2%,M:7.7%,n:1614     |
+# |1437    Complete BUSCOs (C)                       |
+# |1252    Complete and single-copy BUSCOs (S)       |
+# |185    Complete and duplicated BUSCOs (D)         |
+# |52    Fragmented BUSCOs (F)                       |
+# |125    Missing BUSCOs (M)                         |
+# |1614    Total BUSCO groups searched               |
+# ---------------------------------------------------
 
-# Then rename and redo the functional annotation as explained above. Be careful that previous named IDs may be contained in this round's "Name" key. Advise to use ID= before the code for greping gene models. Also, when creating map to rename, maker can get confused if using same "NPAL" prefix, try using "Npal" and then sed to change it to caps. Also, add sufix for different transcripts.
-maker_map_ids --prefix NPAL_ --suffix _R --iterate 1 --justify 6 2024_Algarrobo_rnd6.genes.aed1.gff > 2024_Algarrobo_rnd6.genes.aed1.map
-# After functional annotation, it seems that annotation from previous round persist for some genes. Not changed yet because it may be useful for later comparisons.
-# For comparative genomic analyses and statistics, be careful to first remove tRNA genes in GFF. Also keeping only maker models and not repeats and evidence in the GFF to make file lighter and reading faster.
-grep "trnascan" Algarrobo_rnd6.genes.aed1.ipr.blast.emapper.decorated.gff | cut -f9 | cut -d';' -f1 > trnaIDs.names
-cat trnaIDs.names | grep -v -f - Algarrobo_rnd6.genes.aed1.ipr.blast.emapper.decorated.gff > Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff
+### Rename annotations
+gff3sort.pl --precise --chr_order natural 2024-06-02_Npal_rnd3.merged.gff > 2024-06-02_Npal_rnd3.merged.sorted.gff
+maker_map_ids --prefix NPAL_ --suffix _R --iterate 1 --justify 6 2024-06-02_Npal_rnd3.merged.sorted.gff > 2024-06-02_Npal_rnd3.merged.map
+map_gff_ids 2024-06-02_Npal_rnd3.merged.map 2024-06-02_Npal_rnd3.merged.sorted.gff
+map_fasta_ids 2024-06-02_Npal_rnd3.merged.map 2024-06-02_Npal_rnd3.merged.proteins.fasta
+map_fasta_ids 2024-06-02_Npal_rnd3.merged.map 2024-06-02_Npal_rnd3.merged.transcripts.fasta
+
+## Functional Annotation
+#BLAST
+makeblastdb -in 2024-03-27-uniprot_sprot_plants.fasta -input_type fasta -dbtype prot
+blastp -db 2024-03-27-uniprot_sprot_plants.fasta -query ../2024-05-30_Npal_rnd3.merged.proteins.fasta -out maker2uni.blastp -evalue .000001 -outfmt 6 -num_alignments 1 -seg yes -soft_masking true -lcase_masking -max_hsps 1 -num_threads 25
+maker_functional_fasta 2024-03-27-uniprot_sprot_plants.fasta maker2uni.blastp ../2024-06-02_Npal_rnd3.merged.transcripts.fasta > ../2024-06-02_Npal_rnd3.merged.transcripts.blast.fasta
+cat 2024-06-02_Npal_rnd3.merged.transcripts.blast.fasta | seqkit fx2tab | sort -k1,1 | seqkit tab2fx > 2024-06-02_Npal_rnd3.merged.transcripts.sorted.blast.fasta
+maker_functional_fasta 2024-03-27-uniprot_sprot_plants.fasta maker2uni.blastp ../2024-06-02_Npal_rnd3.merged.proteins.fasta > ../2024-06-02_Npal_rnd3.merged.proteins.blast.fasta
+cat 2024-06-02_Npal_rnd3.merged.proteins.blast.fasta | seqkit fx2tab | sort -k1,1 | seqkit tab2fx > 2024-06-02_Npal_rnd3.merged.proteins.sorted.blast.fasta
+maker_functional_gff 2024-03-27-uniprot_sprot_plants.fasta maker2uni.blastp ../2024-06-02_Npal_rnd3.merged.sorted.gff > ../2024-06-02_Npal_rnd3.merged.sorted.blast.gff
+
+#Interpro
+/data/lastexpansion/Renato/Bioprograms/Interproscan/interproscan-5.67-99.0/interproscan.sh -appl PfamA -iprlookup -goterms -f tsv -i ../2024-06-02_Npal_rnd3.merged.proteins.fasta
+ipr_update_gff ../2024-05-31_Npal_rnd3.merged2.sorted.gff 2024-06-02_Npal_rnd3.nomasked.non_overlapping.proteins.tsv 2024-05-31_Npal_rnd3.merged2.sorted.interpro.gff
+
+#Emapper
+emapper.py -i ../1-Blast/2024-05-31_Npal_rnd3.merged2.proteins.sorted.blast.fasta --output_dir EM_Viridiplantae --cpu 30 --dbmem --report_orthologs --excel --decorate_gff ../1-Blast/2024-05-31_Npal_rnd3.merged2.sorted.blast.gff -o 2024-05-31_Npal_rnd3.merged2.sorted.blast --tax_scope Viridiplantae --data_dir ../../Old_Functional/2-Emapper/EM_databases/
 
 ############################################### ANNOTATION EVALUATION #######################
 # For visualizaiton, separate the GFF in parts
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\test2genome” | grep “EST_Tissue” > EST_Tissue.gff # For different tissues
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\cdna2genome” | grep “ALTEST_Species” > ALTEST_Species.gff # For different species
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\tprotein2genome”> PROT_Swissprot.gff
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\trepeat”> REP_All.gff # Can be further separated into Simple repeats, Low complexity, MITEs, LTRs, DNA, LINE, SINE, RC, Others and Unknown. LTRs can be separated in Old and New if named differently in custom repeat library construction
-cat Algarrobo_rndN.all.maker.noseq.gff | grep -P “\maker\t” | grep -v “trnascan” > MAKER_rndN.gff
-cat Algarrobo_rndN.all.maker.noseq.gff | grep -P “\maker\t” | grep “trnascan” > MAKER_rndN_tRNA.gff
+cat Algarrobo_rnd1.gff | grep -P “\test2genome” > EST_Tissue.gff # For all tissues
+cat Algarrobo_rnd1.gff | grep -P “\cdna2genome” | grep “ALTEST_Species” > ALTEST_Species.gff # For different species
+cat Algarrobo_rnd1.gff | grep -P “\tprotein2genome”> PROT_Swissprot.gff
+# Can use repeat gffs divided by repeat type
 # The genome and all these tracks will be uploaded to IGV for visualization.
 igv.sh
 # It may be needed to sort and index the genome and some of the tracks. If IGV closes unexpectedly, change the configuration to allocate more memory.
 gff3sort.pl --precise --chr_order natural file.gtf/gff | bgzip > file.gtf/gff.gz
 tabix -p gff file.gtf/gff.gz
-# To count the number of genes and the mean gene length, use the following command. Note that trnascan annotations are being excluded. Can also count the number of tRNAs identified.
-cat Algarrobo_rndN.all.maker.noseq.gff | grep -v “trnascan” | awk '{ if ($3 == "gene") print $0 }' | awk '{ sum += ($5 - $4) } END { print NR, sum / NR }' # Number of genes and mean gene length
-# The distribution of the AED score is a good way to evaluate the annotation results. The more support a gene model has, the lower the AED score is. A good annotation typically has 90% of the gene models with an AED less than 0.5. To get the cumulative fraction of gene models under a given AED score use:
-AED_cdf_generator.pl -b 0.025 Algarrobo_rndN.all.maker.noseq.gff # AED distribution
-# Finally, a good metric for the annotation quality is the BUSCO completeness of the transcriptome. To do this, in the Busco environment use the following command. A BUSCO completeness over 90% is good.
-busco -i Algarrobo_rndN.all.maker.transcripts.fasta -o Algarrobo_rndN_maker -l embryophyta_odb10 -m transcriptome -c 30 --tar --augustus_parameters=--progress=true
-
-############################################### REPEAT ANALYSIS #######################
-# Repeats were separated from the general gff into sub-gffs corresponding to MITE, LTR, DNA, RC, LINE, SINE and Other repeats.
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P "\trepeat" | grep -P "match\t" | sed 's/Name=/\t/' | grep -Pv "\trepeatrunner" | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep "genus:Simple_repeat" | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > Simple_repeat.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P "\trepeat" | grep -P "match\t" | sed 's/Name=/\t/' | grep -Pv "\trepeatrunner" | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep "genus:Low_complexity" | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > Low_complexity.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P "\trepeat" | grep -P "match\t" | sed 's/Name=/\t/' | grep -Pv "\trepeatrunner" | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep "genus:RC" | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > RC.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P "\trepeat" | grep -P "match\t" | sed 's/Name=/\t/' | grep -Pv "\trepeatrunner" | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep "genus:LINE" | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > LINE.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P "\trepeat" | grep -P "match\t" | sed 's/Name=/\t/' | grep -Pv "\trepeatrunner" | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep "genus:LTR" | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > LTR.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\trepeat” | grep -P “match\t” | sed 's/Name=/\t/' | grep -Pv “\trepeatrunner” | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep “genus:Unspecified” | grep “dbseq-nr” | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 >> LTR.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\trepeat” | grep -P “match\t” | sed 's/Name=/\t/' | grep -Pv “\trepeatrunner” | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep “genus:Unspecified” | grep “Algarrobo” | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > MITE.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\trepeat” | grep -P “match\t” | sed 's/Name=/\t/' | grep -Pv “\trepeatrunner” | sed 's/|genus/\tgenus/' | sed 's/;Target/\tTarget/' | cut -f1-8,10,11 | uniq | grep “genus:Unspecified” | grep “|SINE|” | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > SINE.bed
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P “\trepeatrunner” | grep -P “match\t” | uniq | cut -f1-9 | sortBed | gff2bed | cut -f1-4,6 > RRunner.bed
-# To count the number of repeats and the base pairs covered in each scaffold, we need to create a general bed file of the assembly. Then, we use bedmap for each repeat bed file separately.
-cat Algarrobo_rnd1.all.maker.noseq.gff | grep -P "\tcontig" | sortBed | gff2bed | cut -f1,2,3,4,6 > ContigSizes.bed
-bedmap --echo --ec --bases-uniq --bases-uniq-f --count ContigSizes.bed repeat.bed > repeat.info
-# To count the number of repeats and bases covered in general:
-cat Simple_repeats.info | sed 's/|/\t/g' | cut -f6 | awk '{s+=$1} END {print s}' #Bases covered
-cat Simple_repeats.info | sed 's/|/\t/g' | cut -f8 | awk '{s+=$1} END {print s}' #Number of repeats
-# To obtain these measures for all repeats combined, concatenate all bed files and then sort appropriately.
-cat Simple_repeats.bed Low_complexity.bed LTR.bed LINE.bed SINE.bed DNA.bed MITE.bed RC.bed RRunner.bed > All.bed
-cat All.bed | sort -k1,1 -k2,2n -k3,3n > All_sortedUnix.bed
-cat ContigSizes.bed | sort -k1,1 -k2,2n -k3,3n > ContigSizes_sortedUnix.bed
-bedmap --echo --ec --bases-uniq --bases-uniq-f --count ContigSizes_sortedUnix.bed All_sortedUnix.bed
-
-############################################### TRANSCRIPTOME ANALYSIS #######################
-# For each rattle output, a summary file was generated using the following:
-cat transcriptome.fq | grep "@cluster" | cut -d' ' -f2 | sort | uniq -c >> Custom_Summ.txt
-cat transcriptome.fq | grep "@cluster" | cut -d' ' -f3 | cut -d'=' -f2 | awk '{sum += $1} END {print sum}' >> Custom_Summ.txt
-X='tail -n1 Custom_Summ.txt'
-cat transcriptome.fq | grep "@cluster" | cut -d' ' -f1,3 | sed 's/total_reads=//' | sed 's/ /\t/' | awk '{$2 /= $X}1' | sed 's/ /\t/' | sort -gr -k2,2 > Proportions.txt
-# Next, filter the GFF file to get the proportions of aligned transcripts and sort them in decreasing order.
-cat Algarrobo_rnd1.all.maker.est2genome.gff | grep "EST_Tissue" | grep -P "\texpressed_sequence_match" | cut -f9 | sed 's/Name=/\t/' | sed 's/;Target/\t/' | cut -f2 | sort | uniq -c | sed 's/ /\t/g' | cut -f7,8 > Tissue_GFFpresence.txt
-while read line; do grep -w $line Proportions_Tissue.txt; done < <(cut -f2 Tissue_GFFpresence.txt) | sort -gr -k2,2 > Tissue_GFFproportions.txt
-# Additionally, modify the names of the aligned transcripts in the original GFF or the visualization tracks to reflect the tissue of origin, since different tissues could have the same cluster name for different transcripts.
-sed -i 's/cluster_/Tissue_cluster_/g' Algarrobo_rnd3.all.maker.noseq.gff
-
-############################################### PSEUDOGENE IDENTIFICATION #######################
-# To update with last annotation round gff
-# First, the regions covering exons in the final gene models are hard masked so the pseudogenes are searched in introns and intergenic regions.
-cat Algarrobo_rnd3.filter.gff | grep -P “\texon” > Exons.gff
-bedtools maskfasta -fi Algarrobo_genome.fa -bed Exons.gff -fo Masked_algarrobo.fa
-# Then, a blast search using the protein sequences. Make sure to use the proper version of blast (PATH).
-makeblastdb -in Masked_algarrobo.fa -dbtype nucl
-tblastn -query Algarrobo_rnd3.filter.proteins.fasta -db Masked_algarrobo.fa -out Algarrobo_prot_tblastn6 -seg no -outfmt 6 -num_threads 15
-# Change the test_parameter_file in the same directory to include the file names and paths.
-# p_seq= 	Add the name of the protein sequences file
-# g_seq=	Add the name of the masked genome file
-# b_out=	Add the name of the blast results file
-# p_codes=	Add the full path to the scripts directory of the Pseudogene Pipeline
-# f_dir=	Add the full path to the bin of the Pseudogene conda environment
-# blosum=	Add the full path to the blosum matrix sample file
-# gff=	Add the full path to the full GFF annotation file
-# r_dir=	Add the full path to the bin of the Pseudogene conda environment
-# Once all files are in the correct directory and the parameter file is adjusted, run the pipeline.
+# A good metric for the annotation quality is the BUSCO completeness of the transcriptome. To do this, in the Busco environment use the following command. A BUSCO completeness over 90% is good.
+busco -i Algarrobo_rndN.all.maker.transcripts.fasta -o Algarrobo_rndN_maker -l embryophyta_odb10 -m transcriptome -c 30 --tar
 
 ############################################### ANNOTATION STATISTICS #######################
-# Number of gene models without UTR: 7,046
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f1,8 | sed 's/|/\t/'| awk '$1==0 && $2==0' | wc -l
-# Number of gene models with both UTRs: 24,049
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f1,8 | sed 's/|/\t/'| awk '$1>0 && $2>0' | wc -l
-# Number of gene models with 5UTR: 27,836
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f1,8 | sed 's/|/\t/'| awk '$1>0' | wc -l
-# Number of gene models with 3UTR: 29,358
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f1,8 | sed 's/|/\t/'| awk '$2>0' | wc -l
-# Mean 5UTR length: 318.738
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f1 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
-# Mean 3UTR length: 465.764
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f8 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
-# Number gene models with exons covered by EST: 33,893
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f3 | awk '$1>0' | wc -l
-# Number of gene models with exons covered by EST, or EST or Protein: 39,964
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f3,4,6 | sed 's/|/\t/g' | awk '$1>0 || $2>0' | wc -l
-# Average fraction of exons covered by EST: 0.84293
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f3 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
-# Average fraction of exons covered by EST or Protein: 0.951426
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f4 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
-# Number of gene models with more than 1 exon: 38,274
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f2,7 | sed 's/|/\t/g' | awk '$2>1' | cut -f1 | wc -l
-# Number of gene models with more than 1 exon with splice sites covered by EST: 32,574
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f2,7 | sed 's/|/\t/g' | awk '$2>1' | cut -f1 | awk '$1 > 0 '| wc -l
-# Average fraction of splice sites covered by EST: 0.858279
-cat 2024_Algarrobo_rnd6.all.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | sed 's/_QI=/\t/' | cut -f2 | cut -d';' -f1 | cut -d'|' -f2,7 | sed 's/|/\t/g' | awk '$2>1' | cut -f1 | awk '$1 > 0 '| awk '{s+=$0}END{print s/NR}'
+QIfile=Npal_QImetrics.txt
+# Number of gene models without UTR: 11,863
+cat $QIfile | awk '$2==0 && $9==0' | wc -l
+# Number of gene models with both UTRs: 11,500
+cat $QIfile | awk '$2>0 && $9>0' | wc -l
+# Number of gene models with 5UTR: 12,833
+cat $QIfile | awk '$2>0' | wc -l
+# Number of gene models with 3UTR: 13,802
+cat $QIfile | awk '$9>0' | wc -l
+# Mean 5UTR length: 315.013
+cat $QIfile | cut -f2 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
+# Mean 3UTR length: 500.779
+cat $QIfile | cut -f9 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
+# Number gene models with exons covered by EST: 15,306
+cat $QIfile | awk '$4>0' | wc -l
+# Number of gene models with exons covered by EST, or EST or Protein: 20,601
+cat $QIfile | awk '$5>0' | wc -l
+# Average fraction of exons covered by EST: 0.854569
+cat $QIfile | awk '$4>0' | cut -f4 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
+# Average fraction of exons covered by EST or Protein: 0.932506
+cat $QIfile | awk '$5>0' | cut -f5 | awk '$1>0' | awk '{s+=$0}END{print s/NR}'
+# Number of gene models with more than 1 exon: 23,838
+cat $QIfile | awk '$8>1' | wc -l
+# Number of gene models with more than 1 exon with splice sites covered by EST: 14,761
+cat $QIfile | awk '$8>1' | awk '$3>0' | wc -l
+# Average fraction of splice sites covered by EST: 0.874982
+cat $QIfile | awk '$8>1' | awk '$3>0' | cut -f3 | awk '{s+=$0}END{print s/NR}'
 ## Functional annotation statistics
-# Number of gene models annotated with InterPro
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | grep "Dbxref=InterPro" | wc -l
-# Print names of gene models annotated with InterPro
-cat 2024_Algarrobo_rnd5.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | grep-v "Dbxref=InterPro" | cut -d'-' -f1 | sed 's/ID=//' > Functional_Interpro.names
+# Number of gene models annotated with InterPro: 23,201
+cat 2024-05-31_Npal_rnd3.merged2.proteins.sorted.blast.fasta.tsv | cut -f1 | sort | uniq | wc -l
+GFFfile=2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff
 # Number of gene models annotated with SwissProt
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | grep -v "Note=Protein of unknown function" | wc -l
-# Print names of gene models annotated with SwissProt
-cat 2024_Algarrobo_rnd5.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | grep -v "Note=Protein of unknown function" | cut -d'-' -f1 | sed 's/ID=//' > Functional_BLAST.names
+cat $GFFfile | grep -P "\tmRNA" | cut -f9 | grep -v "Note=Protein of unknown function" | wc -l
 # Number of gene models annotated with EggNOG
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | grep "em_target" | wc -l
-# Print names of gene models annotated with EggNOG
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | grep "em_target" | cut -d'-' -f1 | sed 's/ID=//' > Functional_EggNOG.names
+cat $GFFfile | grep -P "\tmRNA" | cut -f9 | grep "em_target" | wc -l
 # Functional annotation overlaps were drawn in a Venn diagram
-# Number of gene models with COG categories: 36,031
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_COG" | sed 's/em_COG_cat=/#/' | cut -d'#' -f2 | cut -d';' -f1 | grep -v "None" | wc -l
-# Get list of COG categories for all gene models
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_COG" | sed 's/em_COG_cat=/#/' | cut -d'#' -f2 | cut -d';' -f1 | grep -v "None" | grep -o . | sort | uniq -c | sort -rn | head
+# Number of gene models with COG categories: 22,440
+cat $GFFfile | grep -P "\tmRNA" | grep "em_COG" | sed 's/em_COG_cat=/#/' | cut -d'#' -f2 | cut -d';' -f1 | grep -v "None" | wc -l
+# Get list of COG categories for all gene models:
+cat $GFFfile | grep -P "\tmRNA" | grep "em_COG" | sed 's/em_COG_cat=/#/' | cut -d'#' -f2 | cut -d';' -f1 | grep -v "None" | grep -o . | sort | uniq -c | sort -rn | head
 # Get matches to SwissProt proteins
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "Note=Similar to" | cut -f9 | sed 's/Note=/#/' | cut -d'#' -f2 | cut -d';' -f1 | sed 's/(Fragment/(fragment/' | sed 's/([A-Z][a-z][a-z]/\t/' | cut -f2 | cut -d')' -f1 | sort | uniq -c | sort -rn
+cat $GFFfile | grep -P "\tmRNA\t" | grep "Note=Similar to" | cut -f9 | sed 's/Note=/#/' | cut -d'#' -f2 | cut -d';' -f1 | sed 's/(Fragment/(fragment/' | sed 's/([A-Z][a-z][a-z]/\t/' | cut -f2 | cut -d')' -f1 | sort | uniq -c | sort -rn | head
 # Get KEGG pathway list for all gene models
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_KEGG_Pathway" | sed 's/em_KEGG_Pathway=/\t/' | cut -f10 | cut -d';' -f1 | sed 's/,/\n/g' | sort | uniq -c | sort -rn
+cat $GFFfile | grep -P "\tmRNA" | grep "em_KEGG_Pathway" | sed 's/em_KEGG_Pathway=/\t/' | cut -f10 | cut -d';' -f1 | sed 's/n/\n/g' | sort | uniq -c | sort -rn | head
 # Get PFAM list for all gene models
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "PFAM:" | sed 's/PFAM:/\t/' | cut -f10 | cut -d';' -f1 | sed 's/PFAM://g' | sed 's/,/\n/g' | sort | uniq -c | sort -rn
-# Get number of protein kinase domains identified with EggNOG
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep -w "Pkinase" | wc -l
-# Get number of protein kinase tyr domains identified with EggNOG
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep -w "Pkinase_Tyr" | wc -l
-# Get number of LRR domains identified with EggNOG
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep "LRR" | wc -l
-# Get number of PPR domains identified with EggNOG
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep "PPR" | wc -l
-# Number of gene models involved in carbon fixation modules
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map00710" | wc -l
-# Number of genes involved in carbon fixation modules
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map00710" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
-# Number of gene models involved in biosynthesis of secondary metabolites: 2,786
-cat 2024_Algarrobo_rnd6.genes.maker.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map01110" | wc -l
-# Number of genes involved in biosynthesis of secondary metabolites: 1,781
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map01110" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
-# Number of gene models also involved in biosynthesis of secondary metabolites: 23
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map00940" | grep -v "map01110" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
-# Number of genes involved in signal transduction pathways: 347
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map04075" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
-# Number of genes involved in plant-pathogen interaction: 317
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map04626" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
-# Number of genes involved in MAPK signaling pathways: 225
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "map04016" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
-## MAKER evidence overlap
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | cut -d';' -f1,6 | sed 's/ID=//' | sed 's/-RA;_QI=/\t/' | sed 's/|/\t/g' > Genes_QImaker.tsv
-# Names of gene models with exons covered by EST or Protein
-cat Genes_QImaker.tsv | awk '$4 > 0' | cut -f1 > Exons_EST_Prot_cov.names
-# Names of gene models with exons covered by Prediction
-cat Genes_QImaker.tsv | awk '$6 > 0' | cut -f1 > Exons_Prediction_cov.names
-# GFF of genes overlapped with alternative EST evidence
-bedtools intersect -wa -a 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff -b Algarrobo_rnd1.cdna2genome.gff > Overlap_AltEST_bedtools.bed
-# Names of gene models covered by alternative EST evidence
-cat Overlap_AltEST_bedtools.bed | grep "ID=NPAL" | cut -f9 | grep "RA" | sed 's/-RA/\t/' | cut -f1 | cut -d';' -f1 | sed 's/ID=//' | sort | uniq > Exons_AltEST_cov.names
-############################################### FAMILY ANALYSIS #######################
-grep -P "CYP[0-9]" ../2024_Algarrobo_rnd6.genes.aed1.ipr.blast.emapper.decorated.gff | grep -v "Peptidyl-prolyl" | grep -P "\tmRNA" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | grep -f - ../2024_Algarrobo_rnd6.genes.aed1.ipr.blast.emapper.decorated.gff > CYP450s.gff
+cat 2024-05-31_Npal_rnd3.merged2.proteins.sorted.blast.fasta.tsv | cut -f1,5 | sort | uniq | cut -f2 | sort | uniq -c | sort -rn | head
+# Get number of protein kinase domains identified with EggNOG: 814
+cat $GFFfile | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep -w "Pkinase" | wc -l
+# Get number of protein kinase tyr domains identified with EggNOG:568
+cat $GFFfile | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep -w "Pkinase_Tyr" | wc -l
+# Get number of LRR domains identified with EggNOG: 463
+cat $GFFfile | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep "LRR" | wc -l
+# Get number of PPR domains identified with EggNOG: 465
+cat $GFFfile | grep -P "\tmRNA" | grep "em_PFAMs=" | sed 's/em_PFAMs=/\t/' | cut -f10 | cut -d';' -f1 | grep "PPR" | wc -l
+# Number of gene models involved in carbon fixation modules: 88
+cat $GFFfile | grep -P "\tmRNA\t" | grep "map00710" | wc -l
+# Number of genes involved in carbon fixation modules: 80
+cat $GFFfile | grep -P "\tmRNA\t" | grep "map00710" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
+# Number of gene models involved in biosynthesis of secondary metabolites: 1,775
+cat $GFFfile | grep -P "\tmRNA" | grep "map01110" | wc -l
+# Number of genes involved in biosynthesis of secondary metabolites: 1,658
+cat $GFFfile | grep -P "\tmRNA\t" | grep "map01110" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
+# Number of gene models also involved in biosynthesis of secondary metabolites: 15
+cat $GFFfile | grep -P "\tmRNA\t" | grep "map00940" | grep -v "map01110" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
+# Number of genes involved in signal transduction pathways: 312
+cat $GFFfile | grep -P "\tmRNA\t" | grep "map04075" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
+# Number of genes involved in plant-pathogen interaction: 245
+cat $GFFfile | grep -P "\tmRNA\t" | grep "map04626" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l
+# Number of genes involved in MAPK signaling pathways: 188
+cat $GFFfile | grep -P "\tmRNA\t" | grep "map04016" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | wc -l

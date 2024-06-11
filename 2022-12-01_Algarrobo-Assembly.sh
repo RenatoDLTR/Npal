@@ -1,10 +1,10 @@
 ############################################### HYBRID ASSEMBLY #######################
 # All nanopore raw fast5 files were basecalled using Guppy with SUP model
 guppy_basecaller -r -I Raw_reads.fast5 -s Raw_reads.fastq –config dna_r9.4.1_450bps_sup.cfg -q 0 --trim_strategy dna --disable_trim_barcodes --compress_fastq --calib_detect --device ‘auto’ &> stdout.txt
-# Reads were filtered to retain reads longer than 10 kb only
+# Reads were filtered to retain reads longer than 10 kb only. Only reads in the pass folder were used, that is with quality > 9
 seqkit seq -m 10000 Raw_reads.fastq > Filtered_reads.fastq
 
-## Draft assembly
+## Draft assembly using Flye. Polishing step deactivated, using Medaka and pilon for that
 flye --nano-hq Filtered_reads.fastq --out-dir HQ_10k --threads 30 -i 0
 
 ## Polishing

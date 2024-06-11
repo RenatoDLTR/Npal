@@ -57,30 +57,8 @@ cat 1-Genomes/Bvar/GCA_022379115.2.gff | grep -v "#" | grep "protein_coding" | c
 python3 -m jcvi.formats.gff bed --type=mRNA --key=Parent --primary_only PCG_Bvar.gff -o PCG_Bvar.bed
 # Catch the peptide sequences with the bed names
 cat PCG_Bvar.bed | cut -f4 | grep -f - PCG_Bvar.gff | grep -P "\tCDS" | cut -f9 | sed 's/protein_id=/\t/' | cut -f2 | cut -d';' -f1 | sort | uniq | seqkit grep -f - 1-Sequences/Bauhinia_variegata.GCA_022379115.2.pep.fa > PCG_Bvar.pep
-# Similar for S. tor:
-cat 1-Genomes/Stor/Senna_tora.gff | grep -v "#" | grep "protein_coding" | cut -f9 | sed 's/Name=/\t/' | cut -f2 | cut -d';' -f1 | grep -f - 1-Genomes/Stor/Senna_tora.gff > PCG_Stor.gff
-python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Stor.gff -o PCG_Stor.bed
-cat PCG_Stor.bed | cut -f4 | grep -f - PCG_Stor.gff | grep -P "\tCDS" | cut -f9 | sed 's/protein_id=/\t/' | cut -f2 | cut -d';' -f1 | sort | uniq | seqkit grep -f - 1-Sequences/Senna_tora.GCA_014851425.1.pep.fa > PCG_Stor.pep
-# For N. alb:
-cat 1-Genomes/Nalb/genomic.gff | grep -v "#" | grep "protein_coding" | cut -f9 | sed 's/Name=/\t/' | cut -f2 | cut -d';' -f1 | grep -f - 1-Genomes/Nalb/genomic.gff > PCG_Nalb.gff
-# Generate bed file
-python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Nalb.gff -o PCG_Nalb.bed
-# Catch peptide sequences with names
-cat PCG_Nalb.bed | cut -f4 | grep -f - PCG_Nalb.gff | grep -P "\tCDS" | cut -f9 | sed 's/protein_id=/\t/' | cut -f2 | cut -d';' -f1 | sort | uniq | seqkit grep -f - 1-Sequences/Prosopis_alba.GCF_004799145.1.pep.fa > PCG_Nalb.pep
-# Correct the names in bed file
-while read line; do grep $line PCG_Nalb.gff | grep -P "\tCDS" | cut -f9 | cut -d ';' -f1 | sed 's/ID=cds-//' | uniq; done < <(cat PCG_Nalb.bed | cut -f4) > PCG_Nalb.names
-paste PCG_Nalb.names PCG_Nalb.bed | awk '{print $2 "\t" $3 "\t" $4 "\t" $1 "\t" $6 "\t" $7}' > PCG_Nalb_2.bed
-mv PCG_Nalb.bed PCG_Nalbprev.bed
-mv PCG_Nalb_2.bed PCG_Nalb.bed
-# Similar for P cin:
-cat 1-Genomes/Pcin/genomic.gff | grep -v "#" | grep "protein_coding" | cut -f9 | sed 's/Name=/\t/' | cut -f2 | cut -d';' -f1 | grep -f - 1-Genomes/Pcin/genomic.gff > PCG_Pcin.gff
-python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Pcin.gff -o PCG_Pcin.bed
-cat PCG_Pcin.bed | cut -f4 | grep -f - PCG_Pcin.gff | grep -P "\tCDS" | cut -f9 | sed 's/protein_id=/\t/' | cut -f2 | cut -d';' -f1 | sort | uniq | seqkit grep -f - 1-Sequences/Prosopis_cineraria.GCF_029017545.1.pep.fa > PCG_Pcin.pep
-while read line; do grep $line PCG_Pcin.gff | grep -P "\tCDS" | cut -f9 | cut -d ';' -f1 | sed 's/ID=cds-//' | uniq; done < <(cat PCG_Pcin.bed | cut -f4) > PCG_Pcin.names &
-paste PCG_Pcin.names PCG_Pcin.bed | awk '{print $2 "\t" $3 "\t" $4 "\t" $1 "\t" $6 "\t" $7}' > PCG_Pcin_2.bed
-mv PCG_Pcin.bed PCG_Pcinprev.bed
-mv PCG_Pcin_2.bed PCG_Pcin.bed
-# For Ensembl data (G. max, M. tru, P. per, V. vin).
+# Repeat the process for S. tor, N alb and P cin
+## For Ensembl data (G. max, M. tru, P. per, V. vin).
 # Get only protein coding genes
 cat 1-Genomes/Gmax/Glycine_max.Glycine_max_v2.1.58.gff3 | grep -v "#" | grep "protein_coding" | cut -f9 | sed 's/Name=/\t/' | cut -f2 | cut -d';' -f1 | grep -f - 1-Genomes/Gmax/Glycine_max.Glycine_max_v2.1.58.gff3 > PCG_Gmax.gff
 # Catch canonical transcripts (representatives)
@@ -89,158 +67,190 @@ cat PCG_Gmax.gff | grep -v "coding;transcript" > PCG_Gmax_canonical.gff
 python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Gmax_canonical.gff -o PCG_Gmax_canonical.bed
 # Catch peptide sequences with matching names in bed file
 cat PCG_Gmax_canonical.bed | cut -f4 | sed 's/transcript://' | seqkit grep -f - 1-Sequences/Glycine_max.Glycine_max_v2.1.pep.all.fa > PCG_Gmax_canonical.pep
-# Similar for M. tru:
-cat 1-Genomes/Mtru/Medicago_truncatula.MedtrA17_4.0.58.gff3 | grep -v "#" | grep "protein_coding" | cut -f9 | sed 's/Name=/\t/' | cut -f2 | cut -d';' -f1 | grep -f - 1-Genomes/Mtru/Medicago_truncatula.MedtrA17_4.0.58.gff3 > PCG_Mtru.gff
-cat PCG_Mtru.gff | grep -v "coding;transcript" > PCG_Mtru_canonical.gff
-python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Mtru_canonical.gff -o PCG_Mtru_canonical.bed
-cat PCG_Mtru_canonical.bed | cut -f4 | sed 's/transcript://' | seqkit grep -f - 1-Sequences/Medicago_truncatula.MedtrA17_4.0.pep.all.fa > PCG_Mtru_canonical.pep
-sed -i 's/transcript://' PCG_Mtru_canonical.bed
-# Similar for P. per:
-cat 1-Genomes/Pper/Prunus_persica.Prunus_persica_NCBIv2.58.gff3 | grep -v "#" | grep "protein_coding" | cut -f9 | sed 's/Name=/\t/' | cut -f2 | cut -d';' -f1 | grep -f - 1-Genomes/Pper/Prunus_persica.Prunus_persica_NCBIv2.58.gff3 > PCG_Pper.gff
-cat PCG_Pper.gff | grep -v "coding;transcript" > PCG_Pper_canonical.gff
-python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Pper_canonical.gff -o PCG_Pper_canonical.bed
-cat PCG_Pper_canonical.bed | cut -f4 | sed 's/transcript://' | seqkit grep -f - 1-Sequences/Prunus_persica.Prunus_persica_NCBIv2.pep.all.fa > PCG_Pper_canonical.pep
-sed -i 's/transcript://' PCG_Pper_canonical.bed
-# And for V. vin:
-cat 1-Genomes/Vvin/Vitis_vinifera.PN40024.v4.58.gff3 | grep -v "#" | grep "protein_coding" | cut -f9 | sed 's/Name=/\t/' | cut -f2 | cut -d';' -f1 | grep -f - 1-Genomes/Vvin/Vitis_vinifera.PN40024.v4.58.gff3 > PCG_Vvin.gff
-cat PCG_Vvin.gff | grep -v "coding;transcript" > PCG_Vvin_canonical.gff
-python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Vvin_canonical.gff -o PCG_Vvin_canonical.bed
-cat PCG_Vvin_canonical.bed | cut -f4 | sed 's/transcript://' | cut -d'_' -f1 | seqkit grep -f - 1-Sequences/Vitis_vinifera.PN40024.v4.pep.all.fa > PCG_Vvin_canonical.pep
-sed -i 's/transcript://' PCG_Vvin_canonical.bed
-sed -i 's/_t/_P/' PCG_Vvin_canonical.bed
-#For Neltuma pallida
-cat ../1-Genomes/Npal/NNew/2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | cut -d'_' -f1,2 | grep -f - ../1-Genomes/Npal/NNew/2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff > PCG_Npal.gff
+## Repeat the process for M. tru, P. per and V. vin
+##For Neltuma pallida:
+# Get longest transcript
+grep ">" 2024-06-02_Npal_rnd3.merged.proteins.fasta | cut -d' ' -f1 | sed 's/>//' > Npal_transcript.names
+cat Npal_transcript.names | cut -d'_' -f1,2 | sort | uniq > Npal_genes.names
+grep ">" 2024-06-02_Npal_rnd3.merged.proteins.fasta | sed 's/QI:/\t/' | cut -f2 | sed 's/|/\t/g' | paste Npal_transcript.names - > Npal_QImetrics.txt
+grep ">" ../1-Genomes/Npal/2024-05-30_Npal_rnd3.merged.proteins.blast.fasta | sed 's/QI:/\t/' | cut -f2 > Npal_QImetrics.txt
+while read line; do grep $line Npal_QImetrics.txt | sort -k10,10 -rn | cut -f1 | head -n1 >> Npal_longesttranscript.txt; done < Npal_genes.names
+cat Npal_longesttranscript.txt | seqkit grep -f - 2024-06-02_Npal_rnd3.merged.proteins.fasta > ../../NewGFF/PCG_Npal.pep
+cat Npal_longesttranscript.txt | seqkit grep -f - 2024-06-02_Npal_rnd3.merged.transcripts.fasta > ../../NewGFF/PCG_Npal.dna
+cat Npal_longesttranscript.txt | grep -f - 2024-06-02_Npal_rnd3.merged.sorted.gff > ../../NewGFF/PCG_Npal.gff
 python3 -m jcvi.formats.gff bed --type=mRNA --primary_only PCG_Npal.gff -o PCG_Npal.bed
-cat PCG_Npal.bed | cut -f4 | seqkit grep -f - ../1-Genomes/Npal/NNew/2024_Algarrobo_rnd6.proteins.aed1.blast.fasta > PCG_Npal.pep
 
-# Copy all peptide sequences file to a new directory
+### Long transcripts only
+# ---------------------------------------------------
+# |Results from dataset embryophyta_odb10            |
+# ---------------------------------------------------
+# |C:88.8%[S:85.6%,D:3.2%],F:3.3%,M:7.9%,n:1614      |
+# |1433    Complete BUSCOs (C)                       |
+# |1381    Complete and single-copy BUSCOs (S)       |
+# |52    Complete and duplicated BUSCOs (D)          |
+# |54    Fragmented BUSCOs (F)                       |
+# |127    Missing BUSCOs (M)                         |
+# |1614    Total BUSCO groups searched               |
+# ---------------------------------------------------
+
+# [1] eggNOG-mapper v2: functional annotation, orthology assignments, and domain
+#       prediction at the metagenomic scale. Carlos P. Cantalapiedra,
+#       Ana Hernandez-Plaza, Ivica Letunic, Peer Bork, Jaime Huerta-Cepas. 2021.
+#       Molecular Biology and Evolution, msab293, https://doi.org/10.1093/molbev/msab293
+#
+# [2] eggNOG 5.0: a hierarchical, functionally and phylogenetically annotated
+#       orthology resource based on 5090 organisms and 2502 viruses. Jaime
+#       Huerta-Cepas, Damian Szklarczyk, Davide Heller, Ana Hernandez-Plaza,
+#       Sofia K Forslund, Helen Cook, Daniel R Mende, Ivica Letunic, Thomas
+#       Rattei, Lars J Jensen, Christian von Mering and Peer Bork. Nucleic Acids
+#       Research, Volume 47, Issue D1, 8 January 2019, Pages D309-D314,
+#       https://doi.org/10.1093/nar/gky1085
+#
+# [3] Sensitive protein alignments at tree-of-life scale using DIAMOND.
+#        Buchfink B, Reuter K, Drost HG. 2021.
+#        Nature Methods 18, 366–368 (2021). https://doi.org/10.1038/s41592-021-01101-x
+
+## Copy all peptide sequences file to a new directory
 mkdir NewPeps
 cp *.pep Peps/
 # Change pep files names to full species_names.fa for subsequent analyses
 
 ############################################### COMPARATIVE GENOMICS: ORTHOLOGY INFERENCE #######################
-# Copy the tree file RAxML_bipartitions.RaxMLTree. This was generated using single-copy genes in UNMSM lab with the PROTGAMMAGTR substitution model using single-copy genes from a previous orthofinder run with the same species
-# Group orthologs using OrthoFinder
+# An initial orthofinder run to get the single copy genes
+orthofinder -t 60 -a 60 -f NewPeps/
+for SCgene in *.fa; do mafft --quiet $SCgene > ${SCgene%.fa}.aligned.fa; done
+for SCgene in *aligned.fa; do seqkit fx2tab $SCgene | cut -f2 > ${SCgene%.fa}.seq.tab ; done
+seqkit fx2tab OG0015336.aligned.fa | cut -f1 > Headers.txt
+paste *.seq.tab | sed 's/\t//g' > Pasted_seqs.txt
+paste Headers.txt Pasted_seqs.txt | seqkit tab2fx > SCgenes.merged.fa
+trimal -in SCgenes.merged.fa -out SCgenes.merged.trimed.fa -automated1
+# Obtain a ML tree
+raxml-ng --msa SCgenes.merged.trimed2.fa --model PROTGTR+G --prefix SCG3 --threads 38 --seed 1 --outgroup Vitis_vinifera
+# Copy the tree file RAxML_bipartitions.RaxMLTree and use it for a new orthofinder run
 orthofinder -t 60 -a 60 -s RAxML_bipartitions.RaxMLTree -f NewPeps/ #"-s" will take into account the tree for the orthology inference
 # Apart from the statistics table (which is different from the HOG statistics used for CAFE analysis), upsetR was used to give a graphical output of shared and unique genes. Script is 3-Orthogroup_analysis.R
 
 ############################################### COMPARATIVE GENOMICS: GENE FAMILY DYNAMICS #######################
-# For CAFE analysis, two inputs are needed: the rooted ultrametric tree and the filtered gene counts. For the latter, use 3-Orthogroup_analysis.R
+# For CAFE analysis, two inputs are needed: the rooted ultrametric tree and the filtered gene counts.
+# Reformat the HOG table and remove orthogroups specific for 1 species and with >100 copies. The sript 3-Orthogroup_analysis.R was used
+sed 's/\r$//' hog_gene_counts.tsv > hog_gene_counts.formated.tsv # This may be needed when copying from Windows
 # For making the ultrametric tree, root node age was selected based on literature
 make_ultrametric.py -r 125 RAxML_bipartitions.RaxMLTree
 # Run CAFE analysis
-cafe5 -c 50 -i hog_gene_counts.tsv -t RAxML_bipartitions.RaxMLTree.ultrametric.tre
+cafe5 -c 50 -i hog_gene_counts.formated.tsv -t SCG3.raxml.bestTree.ultrametric.tre
 # Summarize and plot results
 cafeplotter -i results/ -o cafeplotter_results --ignore_branch_length
-# Count families significant at 0.05
-cat ../Base_family_results.txt | awk '$2 < 0.05 {print $0}' > Sig_at_p.05.txt # 1814
-# Count families with Npal p value branch significant at 0.05
-cut -f1 Sig_at_p.05.txt | grep -f - ../Base_branch_probabilities.tab | awk '$5 < 0.05' > Sig_at_p.05_Npal.05.txt # 937
-# Obtain changes of significantly rapidly evolving Families including Npal
+# Count changes significant at 0.05
+printf "Sp\tSign\tSigExp\tSigCon\tExp\tCont\tNoChange\n"; while read line;
+  do
+  a=$(cat result_summary.tsv | awk -v sp=$line '$2 == sp' | awk '$5 < 0.05' | wc -l); \
+  b=$(cat result_summary.tsv | awk -v sp=$line '$2 == sp' | awk '$5 < 0.05' | awk '$4 > 0' | wc -l); \
+  c=$(cat result_summary.tsv | awk -v sp=$line '$2 == sp' | awk '$5 < 0.05' | awk '$4 < 0' | wc -l); \
+  d=$(cat result_summary.tsv| awk -v sp=$line '$2 == sp' | awk '$4 > 0' | wc -l); \
+  e=$(cat result_summary.tsv | awk -v sp=$line '$2 == sp' | awk '$4 < 0' | wc -l); \
+  f=$(cat result_summary.tsv | awk -v sp=$line '$2 == sp' | awk '$4 == 0' | wc -l); \
+  printf "$line\t$a\t$b\t$c\t$d\t$e\t$f\n"; \
+done < <(cat result_summary.tsv | sed '1d' | cut -f2 | sort | uniq)
+# Sp      Sign    SigExp  SigCon  Exp     Cont    NoChange
+# 11      31      1       30      36      102     1653
+# 12      33      15      18      255     81      1455
+# 13      6       3       3       12      7       1772
+# 14      193     172     21      367     183     1241
+# 15      83      43      40      88      230     1473
+# 16      186     157     29      334     123     1334
+# 17      79      69      10      156     82      1553
+# Bauhinia_variegata      201     142     59      432     501     858
+# Glycine_max     528     467     61      887     244     660
+# Medicago_truncatula     320     228     92      394     599     798
+# Neltuma_alba    1352    1252    100     1260    111     420
+# Neltuma_pallida 1122    94      1028    96      1151    544
+# Prosopis_cineraria      141     118     23      320     364     1107
+# Prunus_persica  72      52      20      174     1184    433
+# Senna_tora      289     82      207     186     872     733
+# Vitis_vinifera  71      64      7       277     870     644
+
+printf "Sp\tOG\tCopies\n"; for i in $(seq 2 18); do a=$(cut -f $i Base_count.tab | head -n1); b=$(cut -f $i Base_count.tab | sed '1d' | awk '$1 > 0' | wc -l); c=$(cut -f $i Base_count.tab | sed '1d' | awk '{s+=$1}END{print s}'); printf "$a\t$b\t$c\n"; done
+# Sp      OG      Copies
+# Medicago_truncatula<1>  14865   24600
+# Glycine_max<2>  15336   37632
+# Neltuma_pallida<3>      13133   17995
+# Neltuma_alba<4> 14776   30906
+# Prosopis_cineraria<5>   14713   23307
+# Senna_tora<6>   13915   19731
+# Bauhinia_variegata<7>   15502   27701
+# Prunus_persica<8>       15781   19927
+# Vitis_vinifera<9>       17772   24715
+# <10>    17772   25706
+# <11>    17772   25208
+# <12>    16930   24557
+# <13>    16663   24297
+# <14>    15864   25171
+# <15>    15898   22458
+# <16>    15432   22982
+# <17>    15153   22935
+
+
+### Significant orthogroups within Prosopis sl group including Npal not reducing significantly
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$17 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$17 >= 0' | cut -f1 > 16SigExpanded.txt
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$18 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$18 < 0' | cut -f1 | grep -vf - 16SigExpanded.txt > 16Sig17noSigExpanded.txt
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$4 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$4 < 0' | cut -f1 | grep -vf - 16Sig17noSigExpanded.txt > 16Sig17noSigNpalnoSigExpanded.txt
+
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$18 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$18 >= 0' | cut -f1 > 17SigExpanded.txt
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$4 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$4 < 0' | cut -f1 | grep -vf - 17SigExpanded.txt > 17SigNpalnoSigExpanded.txt
+
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$4 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$4 >= 0' | cut -f1 > NpalSigExpanded.txt
+
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$5 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$5 >= 0' | cut -f1 > NalbSigExpanded.txt
+
+cat ../Base_branch_probabilities.tab | sed '1d' | awk '$6 <= 0.05' | cut -f1 | grep -f - ../Base_change.tab | awk '$6 >= 0' | cut -f1 > PcinSigExpanded.txt
+
+cat 16Sig17noSigNpalnoSigExpanded.txt 17SigNpalnoSigExpanded.txt NpalSigExpanded.txt | sort | uniq > Prosopis_Expanded.txt
+# 411/821 genes for 120/194 gene families
+
+cat Prosopis_Expanded.txt | grep -f - N0.tsv | cut -f8 | sed 's/, /\n/g' | sort | grep -f - Allgene_nameterms.txt > Prosopis_Expanded_geneterms.txt
+# Same as before but only expanding in Npal branch
+cat PcinSigExpanded.txt NalbSigExpanded.txt | sort | uniq | grep -v -f - NpalSigExpanded.txt > Algarrobo_Only_Expanded.txt
+# 188/381 genes from 60/92 gene families
+
+# Get groups present in Prosopis s.l group including Npal but absent in the others
+cat N0.tsv | sed '1d' | cut -f1,11 | grep -Pv "\t$" > Groups/N0_Stor.txt # Do this for each species
+cat N0_Bvar.txt N0_Gmax.txt N0_Mtru.txt N0_Pper.txt N0_Stor.txt N0_Vvin.txt | cut -f1 | sort | uniq | grep -v -f - N0_Npal.txt > N0_OtherAbsNpalPres.txt # 605/1309 genes from 452/878 gene families
+
+# Significant orthogroups with N pallida significant
+cat ../Base_family_results.txt | awk '$2 < 0.05' | cut -f1 | grep -f - ../Base_branch_probabilities.tab | awk '$4 < 0.05' > Sig_at_p.05_Npal.05.txt
+# Changes of significantly rapidly evolving Families including Npal
 cat Sig_at_p.05_Npal.05.txt | cut -f1 | grep -f - ../Base_change.tab > Change_at_p.05_Npal.05.txt
-# Obtain counts of significantly rapidly evolving Families including Npal
+# Counts of significantly rapidly evolving Families including Npal
 cat Sig_at_p.05_Npal.05.txt | cut -f1 | grep -f - ../Base_count.tab > Count_at_p.05_Npal.05.txt
-# Count estimated number of genes/orthogroups for each species and nodes from the cafeplotter summary. Also, from CAFE tables got number of (significant) expanded/contracted families for each species and nodes.
-# Get family expansion rate for all species and each species, as well as the number of expanded/contracted/non-changing families from the CAFE report.
 
-############################################### COMPARATIVE GENOMICS: GO ENRICHMENT ANALYSIS #######################
+# Get OG and CAFE p values to paste to GFF
+cat Change_at_p.05_Npal.05.txt | awk '$4 > 0' | cut -f1 | grep -f - N0.tsv | cut -f8 | sed 's/, /\n/g' | cut -d'_' -f1,2 | grep -f - 2024-6-02_Npal_rnd3.merged.sorted.blast.interpro.emapper.decorated.gff | grep -P "\tmRNA\t" > Expanded_genes.gff
+cat Expanded_genes.gff | cut -f9 | cut -d';' -f1 | sed 's/ID=//' > Expanded_gene_names.txt
+while read line; do a=$(echo $line | cut -d'_' -f1,2 | grep -f - N0.tsv | cut -f1); b=$(grep $a ../3-CAFE/results/Base_family_results.txt | cut -f2); c=$(grep $a ../3-CAFE/results/Base_branch_probabilities.tab | cut -f4); d=$(grep $a OG_onlyNPal.txt); printf "$line\t$a\t$b\t$c\t$d\n"; done < Expanded_gene_names.txt > Expanded_gene_info.txt
+
+############################################## COMPARATIVE GENOMICS: GO ENRICHMENT ANALYSIS #######################
 # Append all gene models with GO terms
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | grep "em_GOs" | cut -f9 | sed 's/;Parent/\t/' | sed 's/em_GOs=/\t/' | cut -f1,3 | grep -Pv "\t$" | sed 's/;em/\t/' | cut -f1,2 | grep -Pv "\t$" > All_gene_models_GO.names
-# Get names of all genes
-cat 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" | cut -f9 | cut -d'_' -f1,2 | sort | uniq | sed 's/$/_R1;/' > AllGenes.txt
-# Get names of expanded orthogroups
-cat Change_at_p.05_Npal.05.txt | awk '$5 > 0' | cut -f1 > Orthogroups_expanded.names
-# Get names of genes in expanded orthogroups
-while read line; do grep $line N0.tsv | cut -f8 | sed 's/, /\n/g'; done < Orthogroups_expanded.names | sort > Genes_expanded.names
-# Get list of genes appended to expanded orthogroups
-while read line; do grep $line Results_Mar22/Phylogenetic_Hierarchical_Orthogroups/N0.tsv | cut -f1,8; done < Orthogroups_expanded.names | sort > Genes_expanded_listed.names
-# Get list of GO terms for each gene (represented by one gene model)
-while read line; do grep $line All_gene_models_GO.names | head -n1; done < <(cat AllGenes.txt | cut -d'_' -f1,2 | sed 's/ID=//') > GOterms.names
-# Remove gene model suffix to match gene names
-cat GOterms.names | sed 's/ID=//' | sed 's/_R/\t/' | cut -f1,3 > GOterms_genes.names
-# Modify gene model names to match gene names
-cat AllGenes.txt | cut -d'_' -f1,2 | sed 's/ID=//' > AllGenes_mod.txt
-# Modify expanded gene model names to match gene names
-cat Genes_expanded.names | cut -d'_' -f1,2 > Genes_expanded_mod.names
-# In R, make the analysis using fisher exact test and weight01 algorithm with 4-TopGO_analysis.R
-# Do the same analysis for genes from orthogroups expanded only in Neltuma pallida
-while read line; do grep $line Results_Mar22/Phylogenetic_Hierarchical_Orthogroups/N0.tsv | cut -f8 | sed 's/, /\n/g'; done < Orthogroup_expanded_NpalOnly.names | sort > Genes_expanded_NpalOnly.names
-cat Genes_expanded_NpalOnly.names | cut -d'_' -f1,2 > Genes_expanded_NpalOnly_mod.names
+cat Npal_longesttranscript.txt | grep -f - 2024-6-02_Npal_rnd3.merged.sorted.blast.interpro.emapper.decorated.gff | grep -P "\tmRNA\t" | cut -f9 | grep "em_GOs=GO" | cut -d';' -f1 | sed 's/ID=//' > Allgene_names.txt
+cat Npal_longesttranscript.txt | grep -f - 2024-6-02_Npal_rnd3.merged.sorted.blast.interpro.emapper.decorated.gff | grep -P "\tmRNA\t" | cut -f9 | grep "em_GOs=GO" | sed 's/em_GOs=GO/\tGO/' | cut -f2 | sed 's/,GO/, GO/g' > Allgene_terms.txt
+paste Allgene_names.txt Allgene_terms.txt > Allgene_nameterms.txt # 12,860 genes with GO terms
+awk '$4 > 0' Change_at_p.05_Npal.05.txt | cut -f1 | grep -f - N0.tsv | cut -f8 | sed 's/, /\n/g' | sort | grep -f - Allgene_nameterms.txt > Expanded_geneterms.txt #188/387 genes from 60/94 expanded families with GO terms
 
-############################################### EXTRA CAFE ANALYSIS #######################
-# Append gene names and orthogroup names to GO terms
-cat Genes_expanded_mod.names | grep -f - GOterms_genes.names > GOterms_expanded_mod.names
-# All GO terms obtained from topGO full table, copied to a new file with nano.
-while read line;
-do
-  if grep $line GOterms_expanded_mod.names >/dev/null
-  then grep $line GOterms_expanded_mod.names | cut -f1 | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/, /g' | sed 's/^/'"$line"'\t/'
-else echo $line
-fi; done < AllGOterms.txt >> GOterms_expanded_genesinvolved.names
-# Get list of genes for all expanded orthogroups
-cat N0_Npal.tsv | grep -f Orthogroups_expanded.names > Expanded_N0.tsv
-# Append expanded orthogroup names to each GO term
-while read line;
-do
-  if echo $line | sed 's/, /\n/g' | grep -f - Expanded_N0.tsv >/dev/null
-  then echo $line | sed 's/, /\n/g' | grep -f - Expanded_N0.tsv | cut -f1 | sort | uniq | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/, /g'
-else echo $line
-fi; done < <(cut -f2 GOterms_expanded_genesinvolved.names) >> GOterms_expanded_orthogroupsinvolved.names
-# Append genes expanded only in Neltuma pallida to each GO term
-cat Genes_expanded_NpalOnly_mod.names | grep -f - GOterms_genes.names > GOterms_expanded_NpalOnly.names
-while read line;
-do
-  if grep $line GOterms_expanded_NpalOnly.names >/dev/null
-  then grep $line GOterms_expanded_NpalOnly.names | cut -f1 | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/, /g' | sed 's/^/'"$line"'\t/'
-else echo $line
-fi; done < AllGOterms.txt >> GOterms_expanded_genesinvolved_NpalOnly.names
-# Get orthogroup names of genes expanded only in Neltuma pallida
-cat N0_Npal.tsv | grep -f Orthogroups_expanded_NpalOnly.names > Expanded_N0_NpalOnly.tsv
-while read line;
-do
-  if echo $line | sed 's/, /\n/g' | grep -f - Expanded_N0_NpalOnly.tsv >/dev/null
-  then echo $line | sed 's/, /\n/g' | grep -f - Expanded_N0_NpalOnly.tsv | cut -f1 | sort | uniq | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/, /g'
-else echo $line
-fi; done < <(cut -f2 GOterms_expanded_genesinvolved_NpalOnly.names) >> GOterms_expanded_orthogroupsinvolved_NpalOnly.names
-# Get full annotation for expanded genes
-cat Genes_expanded_mod.names | sed 's/NPAL/ID=NPAL/' | grep -f - 2024_Algarrobo_rnd6.PCgenes.aed1.ipr.blast.emapper.decorated.gff | grep -P "\tmRNA" > Gene_models_expanded.gff
-# Get names of gene models in expanded orthogroups (just gene name with -R1 suffix)
-while read line; do grep $line Expanded_N0.tsv | cut -f1; done < <(cat Gene_models_expanded.gff | cut -f9 | cut -d'_' -f1,2 | sed 's/ID=//') > Orthogroup_gene_models.names
-# Append family p values to expanded orthogroups
-while read line; do grep $line Base_family_results.txt | cut -f2; done < Orthogroup_gene_models.names > Orthogroup_familyp.names
-# Append Neltuma pallida p values to each gene of each orthogroup
-while read line; do grep $line Base_branch_probabilities.tab | cut -f2; done < Orthogroup_gene_models.names > Orthogroup_branch.names
-# Append a "Y" to each gene of orthogroups if they are expanded only in Neltuma pallida, "N" otherwise
-while read line;
-do
-  if grep $line Orthogroup_expanded_NpalOnly.names >/dev/null
-  then echo "Y"
-else echo "N"
-fi; done < Orthogroup_Genes.names > Orthogroup_OnlyNpal.names
+cat ../3-CAFE/results/Base_branch_probabilities.tab | awk '$4 <= 0.05' | awk '$2 > 0.05' | awk '$3 > 0.05' | awk '$5 > 0.05' | awk '$6 > 0.05' | awk '$7 > 0.05' | awk '$8 > 0.05' | awk '$9 > 0.05' | awk '$10 > 0.05' | cut -f1 | grep -f - Change_at_p.05_Npal.05.txt | awk '$4 > 0' | cut -f1 | grep -f - N0.tsv | cut -f8 | sed 's/, /\n/g' | sort | uniq | grep -f - Allgene_nameterms.txt > Expanded_NpalOnly_geneterms.txt
+#45 OG significant only for Npal, 20 expanding, 25 contracting
+#20 OG expanding with 111 genes, from which 73 had GO terms (from 17/20 orthogroups)
+
+# In R, make the analysis using fisher exact test and weight01 algorithm with 4-TopGO_analysis.R
 
 ############################################### SYNTENY ANALYSIS #######################
 ## Pairwise comparisons using MCScanX. In each case will generate a dotplot and depth histogram pdf
-# Compare Npal genome with itself.
 python3 -m jcvi.compara.catalog ortholog --dbtype=prot --cscore=0.9 PCG_Npal PCG_Npal --no_strip_names
 python3 -m jcvi.compara.synteny depth --histogram PCG_Npal.PCG_Npal.lifted.anchors &> PCG_Npal.histo
-#Compare Npal with Gmax
-python3 -m jcvi.compara.catalog ortholog --dbtype=prot --cscore=0.9 PCG_Npal PCG_Gmax_canonical --no_strip_names
-python3 -m jcvi.compara.synteny depth --histogram PCG_Npal.PCG_Gmax_canonical.lifted.anchors &> PCG_Npal_PCG_Gmax_canonical.histo
-#Compare Npal with Mtru
-python3 -m jcvi.compara.catalog ortholog --dbtype=prot --cscore=0.9 PCG_Npal PCG_Mtru_canonical --no_strip_names
-python3 -m jcvi.compara.synteny depth --histogram PCG_Npal.PCG_Mtru_canonical.lifted.anchors &> PCG_Npal_PCG_Mtru_canonical.histo
-#Compare Npal with Vvin
-python3 -m jcvi.compara.catalog ortholog --dbtype=prot --cscore=0.9 PCG_Npal PCG_Vvin_canonical --no_strip_names
-python3 -m jcvi.compara.synteny depth --histogram PCG_Npal.PCG_Vvin_canonical.lifted.anchors &> PCG_Npal_PCG_Vvin_canonical.histo
-#Compare Npal with Nalb
-python3 -m jcvi.compara.catalog ortholog --dbtype=prot --cscore=0.9 PCG_Npal PCG_Nalb --no_strip_names
-python3 -m jcvi.compara.synteny depth --histogram PCG_Npal.PCG_Nalb.lifted.anchors &> PCG_Npal_PCG_Nalb.histo
-#Compare Npal with Pcin
-python3 -m jcvi.compara.catalog ortholog --dbtype=prot --cscore=0.9 PCG_Npal PCG_Pcin --no_strip_names
-python3 -m jcvi.compara.synteny depth --histogram PCG_Npal.PCG_Pcin.lifted.anchors &> PCG_Npal_PCG_Pcin.histo
-# Create comparative maps for Vvin - Npal and Gmax - Npal
-python3 -m jcvi.compara.synteny screen --simple PCG_Npal.PCG_Vvin_canonical.anchors PCG_Npal.PCG_Vvin_canonical.anchors.new
-python3 -m jcvi.compara.synteny screen --simple PCG_Npal.PCG_Gmax_canonical.anchors PCG_Npal.PCG_Gmax_canonical.anchors.new
+python3 -m jcvi.compara.synteny screen --simple PCG_Npal.PCG_Npal.anchors PCG_Npal.PCG_Npal.anchors.new
+# Do the same for other comparisons
+## Bed for circos (also Chr bed (no scaffold) and GC in 10kb windows) Copy the PCG_Npal.PCG_Npal.anchors.simple for circos link data
+cat 2024-6-02_Npal_rnd3.merged.sorted.blast.interpro.emapper.decorated.gff | grep -P "\tgene\t" | cut -f1,4,5,9 | sed 's/;/\t/' | cut -f1-4 | sed 's/ID=//' | awk '{print $1 "\t" $2-1 "\t" $3 "\t" $4}' > Gene.bed
+cat ../../../../Repeat_Library/Repeatmodeler/Masking/05_full_out/ppa_v1.asm.full_mask.gff3 | cut -f1,4,5,9 | sed 's/Target=//' | sed 's/ /_/g' | awk '{print $1 "\t" $2-1 "\t" $3 "\t" $4}' > Repeats.bed
+
 # Colour the different links between chromosomes by adding at the start of the lines of anchors.simple a code based on the gene name and chromosome
 # Define colors based on viridis palette
 nano Colors.txt # Copy the following
@@ -259,51 +269,58 @@ nano Colors.txt # Copy the following
 # Chr13,#481c6e
 # Chr14,#440154
 sed -i 's/,/\t/' Colors.txt
+
 # Replace starts with colors
 while read line;
 do
-  DUM=$(echo $line | cut -d' ' -f1 | grep -f - PCG_Npal.bed | cut -f1 | grep -w -f - Colors.txt | cut -f2)
-  echo $line | sed 's/^/'"$DUM"'*/';
+  DUM=$(echo $line | cut -d' ' -f1 | grep -f - PCG_Npal.bed | cut -f1 | grep -w -f - Colors.txt | cut -f2); \
+  echo $line | sed 's/^/'"$DUM"'*/'; \
 done < PCG_Npal.PCG_Vvin_canonical.anchors.simple >> PCG_Npal.PCG_Vvin_canonical.anchors.simple.col
+
 while read line;
 do
-  DUM=$(echo $line | cut -d' ' -f1 | grep -f - PCG_Npal.bed | cut -f1 | grep -w -f - Colors.txt | cut -f2)
-  echo $line | sed 's/^/'"$DUM"'*/';
+  DUM=$(echo $line | cut -d' ' -f1 | grep -f - PCG_Npal.bed | cut -f1 | grep -w -f - Colors.txt | cut -f2); \
+  echo $line | sed 's/^/'"$DUM"'*/'; \
 done < PCG_Npal.PCG_Gmax_canonical.anchors.simple >> PCG_Npal.PCG_Gmax_canonical.anchors.simple.col
+
 # Create seqids and layout files, chromosomes were rearranged based on visual inspection
 nano seqids_Vvin.Npal.Gmax.col.txt
 # Copy the following without comment
-## 7,8,10,13,14,16,17,18,4,5,12,19,6,2,3,1,9,11,15
-## Chr1,Chr2,Chr3,Chr4,Chr5,Chr6,Chr7,Chr8,Chr9,Chr10,Chr11,Chr12,Chr13,Chr14
-## 3,10,19,16,4,6,12,14,2,11,13,8,5,20,17,1,15,18,9,7
+# 7,8,10,13,14,16,17,18,4,5,12,19,6,2,3,1,9,11,15
+# Chr1,Chr2,Chr3,Chr4,Chr5,Chr6,Chr7,Chr8,Chr9,Chr10,Chr11,Chr12,Chr13,Chr14
+# 3,10,19,16,4,6,12,14,2,11,13,8,5,20,17,1,15,18,9,7
+
 nano layout_Vvin.Npal.Gmax.col.txt
 # Copy the following without comment except for header
-## # y, xstart, xend, rotation, color, label, va,  bed
-##  .9,     .1,    .8,       0,      , Vitis vinifera, top, PCG_Vvin.bed
-##  .5,     .1,    .8,       0,      , Neltuma pallida, top, PCG_Npal.bed
-##  .1,     .1,    .8,       0,      , Glycine max, bottom, PCG_Gmax.bed
-## # edges
-## e, 0, 1, PCG_Npal.PCG_Vvin_canonical.anchors.simple.col
-## e, 1, 2, PCG_Npal.PCG_Gmax_canonical.anchors.simple.col
+# # y, xstart, xend, rotation, color, label, va,  bed
+#  .9,     .1,    .8,       0,      , Vitis vinifera, top, PCG_Vvin.bed
+#  .5,     .1,    .8,       0,      , Neltuma pallida, top, PCG_Npal.bed
+#  .1,     .1,    .8,       0,      , Glycine max, bottom, PCG_Gmax.bed
+# # edges
+# e, 0, 1, PCG_Npal.PCG_Vvin_canonical.anchors.simple.col
+# e, 1, 2, PCG_Npal.PCG_Gmax_canonical.anchors.simple.col
+
 # Draw the karyotype
 python3 -m jcvi.graphics.karyotype seqids_Vvin.Npal.Gmax.col.txt layout_Vvin.Npal.Gmax.col.txt --figsize=32x9 -o Karyotype_Vvin.Npal.Gmax.col.pdf --nocircles
 
-############################################### GENOME ANALYSIS #######################
+############################################### GENOME COUNTS #######################
 ## Assembly information was obtained from the NCBI/Ensemble webpage
 # Gene characteristics using genestats script (similar for all species)
-genestats.sh PCG_Npal.gff > PCG_Npal.stats &
+../../genestats.sh Algarrobo_rnd3_chr.gff > Algarrobo_rnd3_chr.stats &
+../../genestats.sh Algarrobo_rnd3_scf.gff > Algarrobo_rnd3_scf.stats &
+stats=Algarrobo_rnd3_chr.stats
 # Average gene length
-cat PCG_Npal.bed | awk '{print $3-$2}' | awk '{s+=$0} END {print s/NR}'
+cat $stats | grep -P "\tgene\t" | awk '{print $3-$2}' | awk '{s+=$0} END {print s/NR}'
 # Average transcript length
-cat PCG_Npal.stats | cut -f2 | awk '{s+=$0} END {print s/NR}'
+cat $stats | cut -f2 | awk '{s+=$0} END {print s/NR}'
 # Average CDS length
-cat PCG_Npal.stats | cut -f8 | awk '{s+=$0} END {print s/NR}'
+cat $stats | cut -f8 | awk '{s+=$0} END {print s/NR}'
 # Average number of exons
-cat PCG_Npal.stats | cut -f3 | awk '{s+=$0} END {print s/NR}'
+cat $stats | cut -f3 | awk '{s+=$0} END {print s/NR}'
 # Average exon length
-cat PCG_Npal.stats | awk '$3>0' | awk '{print $4/$3}' | awk '{s+=$0} END {print s/NR}'
+cat $stats | awk '$3>0' | awk '{print $4/$3}' | awk '{s+=$0} END {print s/NR}'
 # Average intron length
-cat PCG_Npal.stats | awk '$5>0' |  awk '{print $6/$5}' | awk '{s+=$0} END {print s/NR}'
+cat $stats | awk '$5>0' |  awk '{print $6/$5}' | awk '{s+=$0} END {print s/NR}'
 ## BUSCO of all species
 busco -i GCF_004799145.1.Nalb.fna -o Nalb_busco -m genome -c 20 --lineage embryophyta_odb10
 busco -i GCA_014851425.1.Stor.fna -o Stor_busco -m genome -c 20 --lineage embryophyta_odb10
@@ -314,3 +331,4 @@ busco -i Prunus_persica.Prunus_persica_NCBIv2.dna.toplevel.fa -o Pper_busco -m g
 busco -i Vitis_vinifera.PN40024.v4.dna.toplevel.fa -o Vvin_busco -m genome -c 20 --lineage embryophyta_odb10
 busco -i ppa_v1.asm.fasta -o Npal_busco -m genome -c 20 --lineage embryophyta_odb10
 busco -i GCA_029017545.1.Pcin.fna -o Pcin_busco -m genome -c 20 --lineage embryophyta_odb10
+#############################################
